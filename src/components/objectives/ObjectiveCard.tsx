@@ -1,25 +1,28 @@
 import React from 'react';
 import { Objective, Person } from '../../types';
-import { TrophyIcon, InfoIcon } from '../icons';
+import { TrophyIcon, InfoIcon, GripVerticalIcon } from '../icons';
 import { ProgressBar, Avatar } from '../ui/SharedComponents';
 
 interface ObjectiveCardProps {
   objective: Objective;
   onClick: () => void;
   people: Person[];
+  dragHandleProps?: any;
 }
 
 export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
   objective,
   onClick,
   people,
+  dragHandleProps,
 }) => {
-  // Calculate aggregated progress
-  const totalProgress = objective.keyResults.length === 0
+  // Calculate aggregated progress (excluding win conditions since they don't have targets)
+  const metricsOnly = objective.keyResults.filter(kr => kr.type !== 'win_condition');
+  const totalProgress = metricsOnly.length === 0
     ? 0
-    : objective.keyResults.reduce((acc, kr) => {
+    : metricsOnly.reduce((acc, kr) => {
         return acc + (kr.target === 0 ? 0 : Math.min(100, (kr.current / kr.target) * 100));
-      }, 0) / objective.keyResults.length;
+      }, 0) / metricsOnly.length;
 
   const isCompany = objective.category === "Company";
 
@@ -44,7 +47,15 @@ export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
       {isCompany && (
           <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-violet-500 to-violet-700"></div>
       )}
-      <div className="p-5 pl-7">
+      <div className="flex">
+        {/* Drag Handle */}
+        <div
+          {...dragHandleProps}
+          className="flex items-center justify-center w-8 text-zinc-700 hover:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors flex-shrink-0"
+        >
+          <GripVerticalIcon />
+        </div>
+        <div className="flex-1 p-5 pl-3">
         <div className="flex justify-between items-start mb-3">
             <div className="flex-1 pr-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -54,20 +65,20 @@ export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
                         </span>
                     )}
                 </div>
-                <div className="flex items-start justify-between gap-4">
-                     <h3 className="text-lg font-medium text-zinc-100 leading-snug group-hover:text-white transition-colors flex-1">
-                        {objective.title}
-                    </h3>
+                <div className="flex items-start gap-2">
                     {objective.description && (
                         <div className="relative group/info shrink-0">
                             <div className="p-1 text-zinc-600 hover:text-zinc-400 transition-colors cursor-help">
                                 <InfoIcon />
                             </div>
-                            <div className="absolute right-0 top-6 w-64 p-3 bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl text-xs text-zinc-400 z-20 hidden group-hover/info:block animate-in fade-in zoom-in-95 pointer-events-none">
+                            <div className="absolute left-0 top-6 w-64 p-3 bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl text-xs text-zinc-400 z-20 hidden group-hover/info:block animate-in fade-in zoom-in-95 pointer-events-none">
                                 {objective.description}
                             </div>
                         </div>
                     )}
+                     <h3 className="text-lg font-medium text-zinc-100 leading-snug group-hover:text-white transition-colors flex-1">
+                        {objective.title}
+                    </h3>
                 </div>
             </div>
 
@@ -107,6 +118,7 @@ export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
                  </div>
              )}
         </div>
+      </div>
       </div>
     </div>
   );

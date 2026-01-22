@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { KeyResultType, Person } from '../../types';
+import { SwapIcon } from '../icons';
 
 export const ProgressBar = ({ progress, className = "" }: { progress: number; className?: string }) => (
   <div className={`h-2 w-full bg-zinc-800 rounded-full overflow-hidden ${className}`}>
@@ -10,17 +11,69 @@ export const ProgressBar = ({ progress, className = "" }: { progress: number; cl
   </div>
 );
 
-export const KRTypeBadge = ({ type }: { type: KeyResultType }) => {
-    switch(type) {
-        case 'leading':
-            return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">Leading</span>;
-        case 'lagging':
-            return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">Lagging</span>;
-        case 'win_condition':
-            return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-pink-500/10 text-pink-400 border border-pink-500/20">Win Condition</span>;
-        default:
-            return null;
+export const KRTypeBadge = ({
+    type,
+    onSwap
+}: {
+    type: KeyResultType;
+    onSwap?: () => void;
+}) => {
+    const [isHovered, setIsHovered] = useState(false);
+    const isSwappable = (type === 'leading' || type === 'lagging') && onSwap;
+
+    const getBadgeClasses = () => {
+        switch(type) {
+            case 'leading':
+                return "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+            case 'lagging':
+                return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+            case 'win_condition':
+                return "bg-pink-500/10 text-pink-400 border-pink-500/20";
+            default:
+                return "";
+        }
+    };
+
+    const getLabel = () => {
+        switch(type) {
+            case 'leading':
+                return 'Leading';
+            case 'lagging':
+                return 'Lagging';
+            case 'win_condition':
+                return 'Win Condition';
+            default:
+                return '';
+        }
+    };
+
+    if (!isSwappable) {
+        return (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getBadgeClasses()}`}>
+                {getLabel()}
+            </span>
+        );
     }
+
+    return (
+        <span
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer hover:scale-105 ${getBadgeClasses()}`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            onClick={(e) => {
+                e.stopPropagation();
+                if (onSwap) onSwap();
+            }}
+            title={`Click to swap to ${type === 'leading' ? 'lagging' : 'leading'}`}
+        >
+            {getLabel()}
+            {isHovered && (
+                <span className="animate-in fade-in zoom-in-75 duration-150">
+                    <SwapIcon />
+                </span>
+            )}
+        </span>
+    );
 }
 
 export const Avatar: React.FC<{ person?: Person; size?: 'xs' | 'sm' | 'md' }> = ({ person, size = 'sm' }) => {

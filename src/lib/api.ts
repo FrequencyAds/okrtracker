@@ -1,13 +1,13 @@
 import { supabase } from './supabase';
-import { Objective, Person, KeyResult, WinLog } from '../types';
+import { Objective, Person, KeyResult, WinLog, ObjectiveType } from '../types';
 
 // ==================== People ====================
 
-export const fetchPeople = async (userId: string): Promise<Person[]> => {
+export const fetchPeople = async (): Promise<Person[]> => {
   const { data, error } = await supabase
     .from('people')
     .select('*')
-    .eq('user_id', userId)
+    .is('deleted_at', null)
     .order('name');
 
   if (error) throw error;
@@ -20,11 +20,14 @@ export const fetchPeople = async (userId: string): Promise<Person[]> => {
   }));
 };
 
-export const createPerson = async (userId: string, person: Omit<Person, 'id'>): Promise<Person> => {
+export const createPerson = async (person: Omit<Person, 'id'>): Promise<Person> => {
+  // Get the first user ID as a default (since data is shared)
+  const { data: users } = await supabase.from('users').select('id').limit(1).single();
+
   const { data, error } = await supabase
     .from('people')
     .insert({
-      user_id: userId,
+      user_id: users?.id || '00000000-0000-0000-0000-000000000001',
       name: person.name,
       initials: person.initials,
       color: person.color
@@ -45,7 +48,7 @@ export const createPerson = async (userId: string, person: Omit<Person, 'id'>): 
 export const deletePerson = async (id: string): Promise<void> => {
   const { error } = await supabase
     .from('people')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) throw error;
@@ -53,8 +56,8 @@ export const deletePerson = async (id: string): Promise<void> => {
 
 // ==================== Objectives ====================
 
-export const fetchObjectives = async (userId: string): Promise<Objective[]> => {
-  const { data: objectives, error } = await supabase
+export const fetchObjectives = async (type?: ObjectiveType): Promise<Objective[]> => {
+  let query = supabase
     .from('objectives')
     .select(`
       *,
@@ -64,18 +67,27 @@ export const fetchObjectives = async (userId: string): Promise<Objective[]> => {
         attributions:win_attributions (person_id)
       )
     `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .is('deleted_at', null);
+
+  if (type) {
+    query = query.eq('type', type);
+  }
+
+  query = query.order('order', { ascending: true });
+
+  const { data: objectives, error } = await query;
 
   if (error) throw error;
 
   return objectives.map(obj => ({
     id: obj.id,
     title: obj.title,
+    type: obj.type as ObjectiveType,
     category: obj.category,
     description: obj.description,
     initiatives: obj.initiatives || [],
-    keyResults: obj.key_results?.map((kr: any) => ({
+    order: obj.order || 0,
+    keyResults: obj.key_results?.filter((kr: any) => !kr.deleted_at).map((kr: any) => ({
       id: kr.id,
       title: kr.title,
       type: kr.type,
@@ -84,24 +96,41 @@ export const fetchObjectives = async (userId: string): Promise<Objective[]> => {
       unit: kr.unit,
       winLog: [] // Will be fetched separately if needed
     })) || [],
-    wins: obj.wins?.map((w: any) => ({
+    wins: obj.wins?.filter((w: any) => !w.deleted_at).map((w: any) => ({
       id: w.id,
       note: w.note,
       date: new Date(w.date).toLocaleDateString(),
-      attributedTo: w.attributions?.map((a: any) => a.person_id) || []
+      attributedTo: w.attributions?.filter((a: any) => !a.deleted_at).map((a: any) => a.person_id) || []
     })) || []
   }));
 };
 
-export const createObjective = async (userId: string, objective: Omit<Objective, 'id' | 'keyResults' | 'wins'>): Promise<Objective> => {
+export const createObjective = async (objective: Omit<Objective, 'id' | 'keyResults' | 'wins'>): Promise<Objective> => {
+  // Get the first user ID as a default (since data is shared)
+  const { data: users } = await supabase.from('users').select('id').limit(1).single();
+
+  // Get the highest order value to place new objective at the end (filter by type)
+  const { data: maxOrderObj } = await supabase
+    .from('objectives')
+    .select('order')
+    .eq('type', objective.type)
+    .is('deleted_at', null)
+    .order('order', { ascending: false })
+    .limit(1)
+    .single();
+
+  const newOrder = (maxOrderObj?.order ?? -1) + 1;
+
   const { data, error } = await supabase
     .from('objectives')
     .insert({
-      user_id: userId,
+      user_id: users?.id || '00000000-0000-0000-0000-000000000001',
       title: objective.title,
+      type: objective.type,
       category: objective.category,
       description: objective.description,
-      initiatives: objective.initiatives || []
+      initiatives: objective.initiatives || [],
+      order: newOrder
     })
     .select()
     .single();
@@ -111,9 +140,11 @@ export const createObjective = async (userId: string, objective: Omit<Objective,
   return {
     id: data.id,
     title: data.title,
+    type: data.type as ObjectiveType,
     category: data.category,
     description: data.description,
     initiatives: data.initiatives || [],
+    order: data.order,
     keyResults: [],
     wins: []
   };
@@ -124,6 +155,7 @@ export const updateObjective = async (objective: Objective): Promise<void> => {
     .from('objectives')
     .update({
       title: objective.title,
+      type: objective.type,
       category: objective.category,
       description: objective.description,
       initiatives: objective.initiatives
@@ -136,7 +168,7 @@ export const updateObjective = async (objective: Objective): Promise<void> => {
 export const deleteObjective = async (id: string): Promise<void> => {
   const { error } = await supabase
     .from('objectives')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) throw error;
@@ -189,7 +221,7 @@ export const updateKeyResult = async (kr: KeyResult): Promise<void> => {
 export const deleteKeyResult = async (id: string): Promise<void> => {
   const { error } = await supabase
     .from('key_results')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) throw error;
@@ -241,7 +273,7 @@ export const createWinLog = async (
 export const deleteWinLog = async (id: string): Promise<void> => {
   const { error } = await supabase
     .from('win_logs')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) throw error;
@@ -267,6 +299,7 @@ export const fetchObjectiveWithDetails = async (objectiveId: string): Promise<Ob
       )
     `)
     .eq('id', objectiveId)
+    .is('deleted_at', null)
     .single();
 
   if (error) throw error;
@@ -274,28 +307,64 @@ export const fetchObjectiveWithDetails = async (objectiveId: string): Promise<Ob
   return {
     id: obj.id,
     title: obj.title,
+    type: obj.type as ObjectiveType,
     category: obj.category,
     description: obj.description,
     initiatives: obj.initiatives || [],
-    keyResults: obj.key_results?.map((kr: any) => ({
+    order: obj.order || 0,
+    keyResults: obj.key_results?.filter((kr: any) => !kr.deleted_at).map((kr: any) => ({
       id: kr.id,
       title: kr.title,
       type: kr.type,
       current: kr.current,
       target: kr.target,
       unit: kr.unit,
-      winLog: kr.winLog?.map((w: any) => ({
+      winLog: kr.winLog?.filter((w: any) => !w.deleted_at).map((w: any) => ({
         id: w.id,
         note: w.note,
         date: new Date(w.date).toLocaleDateString(),
-        attributedTo: w.attributions?.map((a: any) => a.person_id) || []
+        attributedTo: w.attributions?.filter((a: any) => !a.deleted_at).map((a: any) => a.person_id) || []
       })) || []
     })) || [],
-    wins: obj.wins?.map((w: any) => ({
+    wins: obj.wins?.filter((w: any) => !w.deleted_at).map((w: any) => ({
       id: w.id,
       note: w.note,
       date: new Date(w.date).toLocaleDateString(),
-      attributedTo: w.attributions?.map((a: any) => a.person_id) || []
+      attributedTo: w.attributions?.filter((a: any) => !a.deleted_at).map((a: any) => a.person_id) || []
     })) || []
   };
+};
+
+// ==================== Update Key Result Progress ====================
+
+export const updateKeyResultProgress = async (krId: string, current: number): Promise<void> => {
+  const { error } = await supabase
+    .from('key_results')
+    .update({ current })
+    .eq('id', krId);
+
+  if (error) throw error;
+};
+
+// ==================== Update Objectives Order ====================
+
+export const updateObjectivesOrder = async (objectiveOrders: { id: string; order: number; category?: string }[]): Promise<void> => {
+  // Update each objective's order (and optionally category) in a batch
+  const updates = objectiveOrders.map(({ id, order, category }) => {
+    const updateData: any = { order };
+    if (category !== undefined) {
+      updateData.category = category;
+    }
+    return supabase
+      .from('objectives')
+      .update(updateData)
+      .eq('id', id)
+  });
+
+  const results = await Promise.all(updates);
+
+  const errors = results.filter(r => r.error);
+  if (errors.length > 0) {
+    throw errors[0].error;
+  }
 };

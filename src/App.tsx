@@ -9,6 +9,7 @@ import { SettingsModal } from './components/settings/SettingsModal';
 import { ObjectiveDetail } from './components/objectives/ObjectiveDetail';
 import { DashboardView } from './components/views/DashboardView';
 import { OkrsView } from './components/views/OkrsView';
+import { GoalsView } from './components/views/GoalsView';
 import { WinsFeedView } from './components/views/WinsFeedView';
 import { AuthForm } from './components/auth/AuthForm';
 import * as api from './lib/api';
@@ -16,11 +17,12 @@ import * as api from './lib/api';
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [okrs, setOkrs] = useState<Objective[]>([]);
+  const [goals, setGoals] = useState<Objective[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
 
   // App Logic State
-  const [view, setView] = useState<'dashboard' | 'okrs' | 'wins'>('okrs');
+  const [view, setView] = useState<'dashboard' | 'okrs' | 'goals' | 'wins'>('okrs');
 
   // OKR View State
   const [isAddingObj, setIsAddingObj] = useState(false);
@@ -59,12 +61,14 @@ const App = () => {
     if (!session?.user) return;
 
     try {
-      const [objectivesData, peopleData] = await Promise.all([
-        api.fetchObjectives(session.user.id),
-        api.fetchPeople(session.user.id)
+      const [okrsData, goalsData, peopleData] = await Promise.all([
+        api.fetchObjectives('okr'),
+        api.fetchObjectives('goal'),
+        api.fetchPeople()
       ]);
 
-      setObjectives(objectivesData);
+      setOkrs(okrsData);
+      setGoals(goalsData);
       setPeople(peopleData);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -76,14 +80,21 @@ const App = () => {
     if (!newObjTitle.trim() || !session?.user) return;
 
     try {
-      const newObj = await api.createObjective(session.user.id, {
+      const objectiveType = view === 'goals' ? 'goal' : 'okr';
+      const newObj = await api.createObjective({
         title: newObjTitle,
+        type: objectiveType,
         category: newObjCategory.trim() || "General",
         description: undefined,
         initiatives: []
       });
 
-      setObjectives([newObj, ...objectives]);
+      if (objectiveType === 'goal') {
+        setGoals([newObj, ...goals]);
+      } else {
+        setOkrs([newObj, ...okrs]);
+      }
+
       setNewObjTitle("");
       setNewObjCategory("");
       setIsAddingObj(false);
@@ -95,25 +106,44 @@ const App = () => {
   const updateObjective = async (updatedObj: Objective) => {
     try {
       await api.updateObjective(updatedObj);
-      setObjectives(objectives.map((o) => (o.id === updatedObj.id ? updatedObj : o)));
+
+      const updateList = (list: Objective[]) => list.map((o) => (o.id === updatedObj.id ? updatedObj : o));
+
+      if (updatedObj.type === 'goal') {
+        setGoals(updateList(goals));
+      } else {
+        setOkrs(updateList(okrs));
+      }
 
       // Refresh the objective with full details
       const fullObj = await api.fetchObjectiveWithDetails(updatedObj.id);
-      setObjectives(objectives.map((o) => (o.id === fullObj.id ? fullObj : o)));
+
+      if (fullObj.type === 'goal') {
+        setGoals(goals.map((o) => (o.id === fullObj.id ? fullObj : o)));
+      } else {
+        setOkrs(okrs.map((o) => (o.id === fullObj.id ? fullObj : o)));
+      }
     } catch (error) {
       console.error('Error updating objective:', error);
     }
   };
 
   const deleteObjective = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this objective?")) {
-      try {
-        await api.deleteObjective(id);
-        setObjectives(objectives.filter((o) => o.id !== id));
-        setSelectedObjectiveId(null);
-      } catch (error) {
-        console.error('Error deleting objective:', error);
+    try {
+      // Find which list the objective is in
+      const isGoal = goals.some(o => o.id === id);
+
+      await api.deleteObjective(id);
+
+      if (isGoal) {
+        setGoals(goals.filter((o) => o.id !== id));
+      } else {
+        setOkrs(okrs.filter((o) => o.id !== id));
       }
+
+      setSelectedObjectiveId(null);
+    } catch (error) {
+      console.error('Error deleting objective:', error);
     }
   };
 
@@ -121,7 +151,7 @@ const App = () => {
     if (!session?.user) return;
 
     try {
-      const newPerson = await api.createPerson(session.user.id, { name, initials, color });
+      const newPerson = await api.createPerson({ name, initials, color });
       setPeople([...people, newPerson]);
       return newPerson;
     } catch (error) {
@@ -141,18 +171,61 @@ const App = () => {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setObjectives([]);
+    setOkrs([]);
+    setGoals([]);
     setPeople([]);
   };
 
-  const filteredObjectivesForReview = useMemo(() => {
-      if (activeTab === "All") return objectives;
-      return objectives.filter(o => o.category === activeTab);
-  }, [objectives, activeTab]);
+  const handleReorderObjectives = async (reorderedObjectives: Objective[]) => {
+    // Determine which list we're working with
+    const isGoalsList = view === 'goals';
+    const currentList = isGoalsList ? goals : okrs;
 
-  const selectedObjective = useMemo(() =>
-    objectives.find(o => o.id === selectedObjectiveId),
-  [objectives, selectedObjectiveId]);
+    // Update local state immediately for responsive UI
+    if (isGoalsList) {
+      setGoals(reorderedObjectives);
+    } else {
+      setOkrs(reorderedObjectives);
+    }
+
+    // Prepare order updates (including category changes if any)
+    const orderUpdates = reorderedObjectives.map((obj, index) => {
+      const originalObj = currentList.find(o => o.id === obj.id);
+      const updates: { id: string; order: number; category?: string } = {
+        id: obj.id,
+        order: index
+      };
+
+      // Include category if it changed
+      if (originalObj && originalObj.category !== obj.category) {
+        updates.category = obj.category;
+      }
+
+      return updates;
+    });
+
+    // Update in database
+    try {
+      await api.updateObjectivesOrder(orderUpdates);
+    } catch (error) {
+      console.error('Error updating objectives order:', error);
+      // Reload data on error to sync with database
+      loadData();
+    }
+  };
+
+  // Get current objectives based on view
+  const currentObjectives = view === 'goals' ? goals : okrs;
+
+  const filteredObjectivesForReview = useMemo(() => {
+      if (activeTab === "All") return currentObjectives;
+      return currentObjectives.filter(o => o.category === activeTab);
+  }, [currentObjectives, activeTab]);
+
+  const selectedObjective = useMemo(() => {
+    const allObjectives = [...okrs, ...goals];
+    return allObjectives.find(o => o.id === selectedObjectiveId);
+  }, [okrs, goals, selectedObjectiveId]);
 
   // Navigation Logic for Review Mode
   const navigateObjectives = (direction: 'next' | 'prev') => {
@@ -211,6 +284,12 @@ const App = () => {
                           >
                              <TargetIcon /> OKRs
                           </button>
+                          <button
+                            onClick={() => setView('goals')}
+                            className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'goals' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                          >
+                             <TargetIcon /> Goals
+                          </button>
                            <button
                             onClick={() => setView('wins')}
                             className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'wins' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -244,12 +323,12 @@ const App = () => {
       <main className="w-full max-w-[1600px] mx-auto px-4 md:px-8 py-8">
 
         {view === 'dashboard' && (
-            <DashboardView objectives={objectives} />
+            <DashboardView objectives={[...okrs, ...goals]} />
         )}
 
         {view === 'okrs' && (
             <OkrsView
-                objectives={objectives}
+                objectives={okrs}
                 categories={CATEGORIES}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
@@ -262,11 +341,31 @@ const App = () => {
                 newObjCategory={newObjCategory}
                 setNewObjCategory={setNewObjCategory}
                 people={people}
+                onReorderObjectives={handleReorderObjectives}
+            />
+        )}
+
+        {view === 'goals' && (
+            <GoalsView
+                objectives={goals}
+                categories={CATEGORIES}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onObjectiveClick={setSelectedObjectiveId}
+                isAddingObj={isAddingObj}
+                setIsAddingObj={setIsAddingObj}
+                handleAddObjective={handleAddObjective}
+                newObjTitle={newObjTitle}
+                setNewObjTitle={setNewObjTitle}
+                newObjCategory={newObjCategory}
+                setNewObjCategory={setNewObjCategory}
+                people={people}
+                onReorderObjectives={handleReorderObjectives}
             />
         )}
 
         {view === 'wins' && (
-            <WinsFeedView objectives={objectives} people={people} />
+            <WinsFeedView objectives={[...okrs, ...goals]} people={people} />
         )}
 
       </main>

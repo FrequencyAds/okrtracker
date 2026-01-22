@@ -25,13 +25,14 @@ model User {
 
 // Person/Team Member model
 model Person {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
   name      String
-  initials  String   @db.VarChar(10)
-  color     String   @db.VarChar(50)
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  initials  String    @db.VarChar(10)
+  color     String    @db.VarChar(50)
+  userId    String    @map("user_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   // Relations
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -39,19 +40,23 @@ model Person {
 
   @@index([userId])
   @@index([name])
+  @@index([deletedAt])
   @@map("people")
 }
 
 // Objective model
 model Objective {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String        @id @default(uuid()) @db.Uuid
   title       String
-  category    String?  @db.VarChar(100)
-  description String?  @db.Text
-  initiatives String[] // Array of initiative descriptions
-  userId      String   @map("user_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  type        ObjectiveType @default(okr)
+  category    String?       @db.VarChar(100)
+  description String?       @db.Text
+  initiatives String[]      // Array of initiative descriptions
+  order       Int           @default(0)
+  userId      String        @map("user_id") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
 
   // Relations
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -59,8 +64,11 @@ model Objective {
   wins       WinLog[]    @relation("ObjectiveWins")
 
   @@index([userId])
+  @@index([type])
   @@index([category])
   @@index([createdAt])
+  @@index([deletedAt])
+  @@index([order])
   @@map("objectives")
 }
 
@@ -75,6 +83,7 @@ model KeyResult {
   objectiveId String        @map("objective_id") @db.Uuid
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
 
   // Relations
   objective Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
@@ -82,6 +91,7 @@ model KeyResult {
 
   @@index([objectiveId])
   @@index([type])
+  @@index([deletedAt])
   @@map("key_results")
 }
 
@@ -91,6 +101,7 @@ model WinLog {
   note        String    @db.Text
   date        DateTime  @default(now())
   createdAt   DateTime  @default(now()) @map("created_at")
+  deletedAt   DateTime? @map("deleted_at")
   objectiveId String?   @map("objective_id") @db.Uuid
   keyResultId String?   @map("key_result_id") @db.Uuid
 
@@ -104,15 +115,17 @@ model WinLog {
   @@index([objectiveId])
   @@index([keyResultId])
   @@index([date])
+  @@index([deletedAt])
   @@map("win_logs")
 }
 
 // Junction table for many-to-many relationship between WinLog and Person
 model WinAttribution {
-  id        String   @id @default(uuid()) @db.Uuid
-  winLogId  String   @map("win_log_id") @db.Uuid
-  personId  String   @map("person_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(uuid()) @db.Uuid
+  winLogId  String    @map("win_log_id") @db.Uuid
+  personId  String    @map("person_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
 
   winLog WinLog @relation(fields: [winLogId], references: [id], onDelete: Cascade)
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
@@ -125,8 +138,13 @@ model WinAttribution {
 
 // Enum for KeyResult types
 enum KeyResultType {
-  standard
   leading
   lagging
   win_condition
+}
+
+// Enum for Objective types
+enum ObjectiveType {
+  okr
+  goal
 }

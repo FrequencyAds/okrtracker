@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-interface OkrsViewProps {
+interface GoalsViewProps {
     objectives: Objective[];
     categories: string[];
     activeTab: string;
@@ -71,7 +71,7 @@ const SortableObjectiveCard: React.FC<SortableObjectiveCardProps> = ({ objective
   );
 };
 
-export const OkrsView: React.FC<OkrsViewProps> = ({
+export const GoalsView: React.FC<GoalsViewProps> = ({
     objectives,
     categories,
     activeTab,
@@ -104,71 +104,19 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
 
         if (!over || active.id === over.id) return;
 
-        const draggedObj = objectives.find((obj) => obj.id === active.id);
-        const targetObj = objectives.find((obj) => obj.id === over.id);
+        const oldIndex = filteredObjectives.findIndex((obj) => obj.id === active.id);
+        const newIndex = filteredObjectives.findIndex((obj) => obj.id === over.id);
 
-        if (!draggedObj || !targetObj) return;
+        if (oldIndex === -1 || newIndex === -1) return;
 
-        // Check if we're crossing sections on "All" tab
-        const draggedIsCompany = draggedObj.category === "Company";
-        const targetIsCompany = targetObj.category === "Company";
-        const crossingSections = activeTab === "All" && draggedIsCompany !== targetIsCompany;
+        const reordered = arrayMove(filteredObjectives, oldIndex, newIndex);
 
-        if (crossingSections) {
-            // Update category when crossing sections
-            // If moving TO Company, set to "Company"
-            // If moving FROM Company, set to target's category or "General"
-            const newCategory = targetIsCompany
-                ? "Company"
-                : (targetObj.category || "General");
-
-            const updatedObj = {
-                ...draggedObj,
-                category: newCategory
-            };
-
-            // Find position in the target section
-            const targetSectionObjs = objectives.filter(o =>
-                targetIsCompany ? o.category === "Company" : o.category !== "Company"
-            );
-            const targetIndex = targetSectionObjs.findIndex(o => o.id === over.id);
-
-            // Remove from original list and insert at new position
-            const withoutDragged = objectives.filter(o => o.id !== active.id);
-            const allTargetSection = withoutDragged.filter(o =>
-                targetIsCompany ? o.category === "Company" : o.category !== "Company"
-            );
-            const reorderedSection = [
-                ...allTargetSection.slice(0, targetIndex),
-                updatedObj,
-                ...allTargetSection.slice(targetIndex)
-            ];
-
-            // Reconstruct full list
-            const otherSection = withoutDragged.filter(o =>
-                targetIsCompany ? o.category !== "Company" : o.category === "Company"
-            );
-            const reordered = targetIsCompany
-                ? [...reorderedSection, ...otherSection]
-                : [...otherSection, ...reorderedSection];
-
-            onReorderObjectives(reordered);
+        // If we're in a filtered view, merge back with full list
+        if (activeTab !== "All") {
+            const otherObjs = objectives.filter(o => o.category !== activeTab);
+            onReorderObjectives([...reordered, ...otherObjs]);
         } else {
-            // Normal reordering within same section
-            const oldIndex = filteredObjectives.findIndex((obj) => obj.id === active.id);
-            const newIndex = filteredObjectives.findIndex((obj) => obj.id === over.id);
-
-            if (oldIndex === -1 || newIndex === -1) return;
-
-            const reordered = arrayMove(filteredObjectives, oldIndex, newIndex);
-
-            // If we're in a filtered view, merge back with full list
-            if (activeTab !== "All") {
-                const otherObjs = objectives.filter(o => o.category !== activeTab);
-                onReorderObjectives([...reordered, ...otherObjs]);
-            } else {
-                onReorderObjectives(reordered);
-            }
+            onReorderObjectives(reordered);
         }
     };
 
@@ -191,9 +139,9 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
                 ))}
                  <button
                     onClick={() => setIsAddingObj(true)}
-                    className="ml-auto bg-violet-600 hover:bg-violet-500 text-white px-4 py-1.5 rounded-full font-medium text-xs flex items-center gap-2 transition-colors shadow-lg shadow-violet-900/20 whitespace-nowrap"
+                    className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-full font-medium text-xs flex items-center gap-2 transition-colors shadow-lg shadow-emerald-900/20 whitespace-nowrap"
                 >
-                    <PlusIcon /> <span>New OKR</span>
+                    <PlusIcon /> <span>New Goal</span>
                 </button>
             </div>
 
@@ -203,13 +151,13 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
                     <form onSubmit={handleAddObjective}>
                         <div className="flex flex-col md:flex-row gap-4 mb-4">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-zinc-500 mb-1.5 uppercase tracking-wide">Objective Title</label>
+                                <label className="block text-xs font-medium text-zinc-500 mb-1.5 uppercase tracking-wide">Goal Title</label>
                                 <input
                                     type="text"
-                                    placeholder="e.g., Increase brand awareness"
+                                    placeholder="e.g., Launch new marketing campaign"
                                     value={newObjTitle}
                                     onChange={(e) => setNewObjTitle(e.target.value)}
-                                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all text-sm"
+                                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all text-sm"
                                     autoFocus
                                 />
                             </div>
@@ -220,7 +168,7 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
                                     placeholder="Engineering"
                                     value={newObjCategory}
                                     onChange={(e) => setNewObjCategory(e.target.value)}
-                                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all text-sm"
+                                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all text-sm"
                                     list="categories"
                                 />
                                 <datalist id="categories">
@@ -239,9 +187,9 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
                             </button>
                             <button
                                 type="submit"
-                                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors"
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
                             >
-                                Create Objective
+                                Create Goal
                             </button>
                         </div>
                     </form>
@@ -260,7 +208,7 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
                             <div className="bg-zinc-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-zinc-700">
                                 <TargetIcon />
                             </div>
-                            <h3 className="text-zinc-400 font-medium mb-1">No Objectives found</h3>
+                            <h3 className="text-zinc-400 font-medium mb-1">No Goals found</h3>
                             <p className="text-zinc-600 text-sm">Try changing the filter or create a new goal.</p>
                         </div>
                     ) : (
@@ -269,34 +217,7 @@ export const OkrsView: React.FC<OkrsViewProps> = ({
                                 items={filteredObjectives.map(obj => obj.id)}
                                 strategy={verticalListSortingStrategy}
                             >
-                                {/* Separate Company OKRs visually if on 'All' tab */}
-                                {activeTab === "All" && objectives.some((o: Objective) => o.category === "Company") && (
-                                    <div className="mb-6">
-                                    <div className="flex items-center gap-3 mb-4">
-                                            <div className="h-px bg-zinc-800 flex-1"></div>
-                                            <span className="text-xs font-bold text-violet-500 uppercase tracking-widest">Company Priorities</span>
-                                            <div className="h-px bg-zinc-800 flex-1"></div>
-                                    </div>
-                                        {objectives.filter((o: Objective) => o.category === "Company").map((obj: Objective) => (
-                                            <SortableObjectiveCard
-                                                key={obj.id}
-                                                objective={obj}
-                                                onClick={() => onObjectiveClick(obj.id)}
-                                                people={people}
-                                            />
-                                        ))}
-
-                                    <div className="flex items-center gap-3 mb-4 mt-10">
-                                            <div className="h-px bg-zinc-800 flex-1"></div>
-                                            <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest">Department Objectives</span>
-                                            <div className="h-px bg-zinc-800 flex-1"></div>
-                                    </div>
-                                    </div>
-                                )}
-
-                                {filteredObjectives
-                                    .filter((o: Objective) => activeTab !== "All" || o.category !== "Company") // If 'All', filtering out Company because handled above
-                                    .map((obj: Objective) => (
+                                {filteredObjectives.map((obj: Objective) => (
                                     <SortableObjectiveCard
                                         key={obj.id}
                                         objective={obj}

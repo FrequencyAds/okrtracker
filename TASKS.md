@@ -100,7 +100,20 @@ pnpm dev
 # 6. Verify all data persists across page refresh
 ```
 
-### 5. Deploy to Production (FUTURE)
+### 5. Add Editable Win Date Feature
+
+**Issue:** Wins currently use the creation timestamp, but should have an editable date field
+- Add `winDate` field to WinLog that defaults to creation date but can be edited
+- Update UI to allow users to modify the date when logging or editing wins
+- Ensure date displays and sorts correctly in wins feed
+
+**Implementation:**
+- Schema: WinLog already has `date` field that defaults to `now()`
+- API: Update `createWinLog` to accept optional date parameter
+- UI: Add date picker to WinLogger component
+- UI: Add date edit functionality to existing wins
+
+### 6. Deploy to Production (FUTURE)
 
 Options:
 - **Vercel** (recommended for Vite apps)

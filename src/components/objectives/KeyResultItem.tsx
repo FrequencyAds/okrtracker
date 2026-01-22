@@ -9,6 +9,8 @@ interface KeyResultItemProps {
   onUpdate: (updatedKr: KeyResult) => void;
   onDelete: () => void;
   people: Person[];
+  onLogWin?: (krId: string, note: string, attributedTo: string[]) => void;
+  onDeleteWin?: (winId: string) => void;
 }
 
 export const KeyResultItem: React.FC<KeyResultItemProps> = ({
@@ -16,6 +18,8 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
   onUpdate,
   onDelete,
   people,
+  onLogWin,
+  onDeleteWin,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -50,19 +54,22 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
   };
 
   const handleLogWin = (note: string, attributedTo: string[]) => {
-      const newWin: WinLog = {
-          id: Date.now().toString(),
-          date: new Date().toLocaleDateString(),
-          note,
-          attributedTo
-      };
-      const updatedLog = [newWin, ...(kr.winLog || [])];
-      onUpdate({ ...kr, winLog: updatedLog, current: updatedLog.length });
+      if (onLogWin) {
+          onLogWin(kr.id, note, attributedTo);
+      }
   }
 
   const handleDeleteWin = (winId: string) => {
-      const updatedLog = (kr.winLog || []).filter(w => w.id !== winId);
-      onUpdate({ ...kr, winLog: updatedLog, current: updatedLog.length });
+      if (onDeleteWin) {
+          onDeleteWin(winId);
+      }
+  }
+
+  const handleSwapType = () => {
+    if (kr.type === 'leading' || kr.type === 'lagging') {
+      const newType = kr.type === 'leading' ? 'lagging' : 'leading';
+      onUpdate({ ...kr, type: newType });
+    }
   }
 
   return (
@@ -74,7 +81,7 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
         <div className="flex justify-between items-start mb-3">
           <div className="flex flex-col gap-1.5 flex-1 pr-4">
               <div className="flex items-center gap-2">
-                 <KRTypeBadge type={kr.type} />
+                 <KRTypeBadge type={kr.type} onSwap={handleSwapType} />
               </div>
               <span className="font-medium text-zinc-200 flex items-start gap-2 leading-tight">
                 <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${progress >= 100 ? (isWinCondition ? 'bg-pink-500' : 'bg-violet-500') : 'bg-violet-500'}`}></div>
@@ -82,18 +89,20 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
               </span>
           </div>
           <span className="text-xs font-mono text-zinc-500 mt-1 whitespace-nowrap">
-            {kr.current} / {kr.target} {kr.unit}
+            {isWinCondition ? `${kr.current} ${kr.unit}` : `${kr.current} / ${kr.target} ${kr.unit}`}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-             <div className={`h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden`}>
-                <div
-                className={`h-full transition-all duration-500 ease-out ${isWinCondition ? 'bg-pink-500' : 'bg-violet-500'}`}
-                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-                />
-            </div>
-            <span className="text-xs font-bold text-zinc-500 w-8 text-right">{Math.round(progress)}%</span>
-        </div>
+        {!isWinCondition && (
+          <div className="flex items-center gap-3">
+               <div className={`h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden`}>
+                  <div
+                  className={`h-full transition-all duration-500 ease-out bg-violet-500`}
+                  style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                  />
+              </div>
+              <span className="text-xs font-bold text-zinc-500 w-8 text-right">{Math.round(progress)}%</span>
+          </div>
+        )}
       </div>
 
       {isEditing && (
@@ -113,16 +122,6 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
 
             {isWinCondition ? (
                 <div className="flex flex-col gap-4">
-                     <div className="flex items-center gap-4">
-                        <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Target Wins</label>
-                        <input
-                            type="number"
-                            value={kr.target}
-                            onChange={handleTargetChange}
-                            className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 w-20 text-white outline-none font-mono text-sm text-center focus:border-violet-500/50"
-                        />
-                     </div>
-
                     <WinLogger
                         onLog={handleLogWin}
                         people={people}

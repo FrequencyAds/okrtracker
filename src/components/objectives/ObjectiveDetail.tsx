@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Objective, Person, KeyResult, KeyResultType, WinLog } from '../../types';
-import { CloseIcon, ChevronLeft, ChevronRight, TrophyIcon, TrashIcon, PlusIcon, CheckIcon } from '../icons';
+import { CloseIcon, ChevronLeft, ChevronRight, TrophyIcon, TrashIcon, PlusIcon, CheckIcon, EditIcon, SaveIcon, XIcon, LinkIcon } from '../icons';
 import { ProgressBar } from '../ui/SharedComponents';
 import { WinLogger, WinList } from '../ui/WinLogger';
 import { KeyResultItem } from './KeyResultItem';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import * as api from '../../lib/api';
 
 interface ObjectiveDetailProps {
     objective: Objective;
@@ -21,13 +23,46 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
     objective, people, onUpdate, onDelete, onClose, onNext, onPrev, hasPrev, hasNext
 }) => {
     const [showAddKr, setShowAddKr] = useState(false);
-    const [activeKrTab, setActiveKrTab] = useState<'metrics' | 'conditions' | 'all'>('metrics');
+    const [activeKrTab, setActiveKrTab] = useState<'metrics' | 'conditions' | 'all'>('all');
 
     // New KR Form State
     const [newKrTitle, setNewKrTitle] = useState("");
     const [newKrTarget, setNewKrTarget] = useState(100);
     const [newKrUnit, setNewKrUnit] = useState("%");
-    const [newKrType, setNewKrType] = useState<KeyResultType>('standard');
+    const [newKrType, setNewKrType] = useState<KeyResultType>('leading');
+
+    // Inline Editing State
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editedTitle, setEditedTitle] = useState(objective.title);
+    const [isEditingDescription, setIsEditingDescription] = useState(false);
+    const [editedDescription, setEditedDescription] = useState(objective.description || '');
+    const [isEditingInitiatives, setIsEditingInitiatives] = useState(false);
+    const [editedInitiatives, setEditedInitiatives] = useState<string[]>(objective.initiatives || []);
+    const [newInitiative, setNewInitiative] = useState('');
+    const [newInitiativeUrl, setNewInitiativeUrl] = useState('');
+
+    // Confirmation Modal State
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {}
+    });
+
+    // Helper functions to parse initiative format: "text|||url"
+    const parseInitiative = (init: string) => {
+        const parts = init.split('|||');
+        return { text: parts[0], url: parts[1] || '' };
+    };
+
+    const formatInitiative = (text: string, url: string) => {
+        return url ? `${text}|||${url}` : text;
+    };
 
     // Handle Keyboard Nav
     useEffect(() => {
@@ -40,12 +75,13 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onNext, onPrev, hasNext, hasPrev, onClose]);
 
-    // Calculate progress
-    const totalProgress = objective.keyResults.length === 0
+    // Calculate progress (excluding win conditions since they don't have targets)
+    const metricsOnly = objective.keyResults.filter(kr => kr.type !== 'win_condition');
+    const totalProgress = metricsOnly.length === 0
       ? 0
-      : objective.keyResults.reduce((acc, kr) => {
+      : metricsOnly.reduce((acc, kr) => {
           return acc + (kr.target === 0 ? 0 : Math.min(100, (kr.current / kr.target) * 100));
-        }, 0) / objective.keyResults.length;
+        }, 0) / metricsOnly.length;
 
     // Calculate total wins for header
     const krWins = objective.keyResults.reduce((acc, kr) => acc + (kr.winLog?.length || 0), 0);
@@ -53,75 +89,107 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
     const totalWins = krWins + objWins;
 
     // Direct Objective Win Handlers
-    const handleAddObjectiveWin = (note: string, attributedTo: string[], linkedConditionId?: string) => {
-        const newWin: WinLog = {
-            id: Date.now().toString(),
-            date: new Date().toLocaleDateString(),
-            note,
-            attributedTo
-        };
+    const handleAddObjectiveWin = async (note: string, attributedTo: string[], linkedConditionId?: string) => {
+        try {
+            // Create the win log in the database
+            await api.createWinLog(
+                note,
+                attributedTo,
+                linkedConditionId ? undefined : objective.id,
+                linkedConditionId
+            );
 
-        // If tied to a specific win condition, update that KR instead of the general objective wins
-        if (linkedConditionId) {
-            const updatedKrs = objective.keyResults.map(kr => {
-                if (kr.id === linkedConditionId) {
-                    const updatedWinLog = [newWin, ...(kr.winLog || [])];
-                    return {
-                        ...kr,
-                        winLog: updatedWinLog,
-                        current: updatedWinLog.length // Auto-increment current progress for win conditions
-                    };
+            // If linked to a win condition, update its current count
+            if (linkedConditionId) {
+                const kr = objective.keyResults.find(k => k.id === linkedConditionId);
+                if (kr) {
+                    const newCount = (kr.winLog?.length || 0) + 1;
+                    await api.updateKeyResultProgress(linkedConditionId, newCount);
                 }
-                return kr;
-            });
-            onUpdate({ ...objective, keyResults: updatedKrs });
-        } else {
-             // Otherwise, add to general objective wins
-             onUpdate({ ...objective, wins: [newWin, ...(objective.wins || [])] });
+            }
+
+            // Refresh the full objective with details
+            const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+            onUpdate(refreshed);
+        } catch (error) {
+            console.error('Error adding win:', error);
         }
     };
 
     const handleDeleteObjectiveWin = (winId: string) => {
-        onUpdate({ ...objective, wins: (objective.wins || []).filter(w => w.id !== winId) });
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Win',
+            message: 'Are you sure you want to delete this win? This action cannot be undone.',
+            onConfirm: async () => {
+                try {
+                    await api.deleteWinLog(winId);
+                    const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                    onUpdate(refreshed);
+                } catch (error) {
+                    console.error('Error deleting win:', error);
+                }
+            }
+        });
     };
 
     // KR Handlers
-    const handleAddKeyResult = (e: React.FormEvent) => {
+    const handleAddKeyResult = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newKrTitle.trim()) return;
 
-        const newKr: KeyResult = {
-            id: Date.now().toString(),
-            title: newKrTitle,
-            type: newKrType,
-            current: 0,
-            target: newKrTarget,
-            unit: newKrUnit,
-            winLog: newKrType === 'win_condition' ? [] : undefined
-        };
+        try {
+            await api.createKeyResult(objective.id, {
+                title: newKrTitle,
+                type: newKrType,
+                current: 0,
+                target: newKrTarget,
+                unit: newKrUnit,
+                winLog: newKrType === 'win_condition' ? [] : undefined
+            });
 
-        onUpdate({
-            ...objective,
-            keyResults: [...objective.keyResults, newKr],
+            // Refresh the full objective with details
+            const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+            onUpdate(refreshed);
+
+            // Reset form
+            setNewKrTitle("");
+            setNewKrTarget(100);
+            setNewKrType('leading');
+            setShowAddKr(false);
+        } catch (error) {
+            console.error('Error creating key result:', error);
+        }
+    };
+
+    const updateKeyResult = async (updatedKr: KeyResult) => {
+        try {
+            await api.updateKeyResult(updatedKr);
+
+            // Refresh the full objective with details
+            const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+            onUpdate(refreshed);
+        } catch (error) {
+            console.error('Error updating key result:', error);
+        }
+    };
+
+    const deleteKeyResult = async (krId: string) => {
+        const kr = objective.keyResults.find(k => k.id === krId);
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Key Result',
+            message: `Are you sure you want to delete "${kr?.title}"? This action cannot be undone.`,
+            onConfirm: async () => {
+                try {
+                    await api.deleteKeyResult(krId);
+                    const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                    onUpdate(refreshed);
+                } catch (error) {
+                    console.error('Error deleting key result:', error);
+                }
+            }
         });
-
-        // Reset form
-        setNewKrTitle("");
-        setNewKrTarget(100);
-        setNewKrType('standard');
-        setShowAddKr(false);
-    };
-
-    const updateKeyResult = (updatedKr: KeyResult) => {
-        const updatedKrs = objective.keyResults.map((kr) =>
-        kr.id === updatedKr.id ? updatedKr : kr
-        );
-        onUpdate({ ...objective, keyResults: updatedKrs });
-    };
-
-    const deleteKeyResult = (krId: string) => {
-        const updatedKrs = objective.keyResults.filter((kr) => kr.id !== krId);
-        onUpdate({ ...objective, keyResults: updatedKrs });
     };
 
     // Derived Lists
@@ -133,17 +201,84 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
     });
 
     // Handle "Add" button click logic to preset types
-    const onStartAdd = () => {
+    const onStartAddMetric = () => {
         setShowAddKr(true);
-        if (activeKrTab === 'conditions') {
-            setNewKrType('win_condition');
-            setNewKrTarget(1);
-            setNewKrUnit('wins');
-        } else {
-            setNewKrType('standard');
-            setNewKrTarget(100);
-            setNewKrUnit('%');
+        setNewKrType('leading');
+        setNewKrTarget(100);
+        setNewKrUnit('%');
+    };
+
+    const onStartAddCondition = () => {
+        setShowAddKr(true);
+        setNewKrType('win_condition');
+        setNewKrTarget(999999); // High number since we want as many as possible
+        setNewKrUnit('wins');
+    };
+
+    // Inline Edit Handlers
+    const handleSaveTitle = async () => {
+        if (editedTitle.trim() && editedTitle !== objective.title) {
+            try {
+                await api.updateObjective({ ...objective, title: editedTitle });
+                const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                onUpdate(refreshed);
+            } catch (error) {
+                console.error('Error updating title:', error);
+            }
         }
+        setIsEditingTitle(false);
+    };
+
+    const handleCancelTitle = () => {
+        setEditedTitle(objective.title);
+        setIsEditingTitle(false);
+    };
+
+    const handleSaveDescription = async () => {
+        if (editedDescription !== objective.description) {
+            try {
+                await api.updateObjective({ ...objective, description: editedDescription || undefined });
+                const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                onUpdate(refreshed);
+            } catch (error) {
+                console.error('Error updating description:', error);
+            }
+        }
+        setIsEditingDescription(false);
+    };
+
+    const handleCancelDescription = () => {
+        setEditedDescription(objective.description || '');
+        setIsEditingDescription(false);
+    };
+
+    const handleSaveInitiatives = async () => {
+        try {
+            await api.updateObjective({ ...objective, initiatives: editedInitiatives });
+            const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+            onUpdate(refreshed);
+        } catch (error) {
+            console.error('Error updating initiatives:', error);
+        }
+        setIsEditingInitiatives(false);
+    };
+
+    const handleCancelInitiatives = () => {
+        setEditedInitiatives(objective.initiatives || []);
+        setIsEditingInitiatives(false);
+    };
+
+    const handleAddInitiative = () => {
+        if (newInitiative.trim()) {
+            const formatted = formatInitiative(newInitiative.trim(), newInitiativeUrl.trim());
+            setEditedInitiatives([...editedInitiatives, formatted]);
+            setNewInitiative('');
+            setNewInitiativeUrl('');
+        }
+    };
+
+    const handleRemoveInitiative = (index: number) => {
+        setEditedInitiatives(editedInitiatives.filter((_, i) => i !== index));
     };
 
     return (
@@ -181,7 +316,16 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                              <TrophyIcon /> {totalWins}
                         </span>
                     </div>
-                    <button onClick={onDelete} className="text-zinc-600 hover:text-red-500 transition-colors p-2" title="Delete Objective">
+                    <button
+                        onClick={() => setConfirmModal({
+                            isOpen: true,
+                            title: 'Delete Objective',
+                            message: `Are you sure you want to delete "${objective.title}"? This will also delete all key results, wins, and initiatives associated with it. This action cannot be undone.`,
+                            onConfirm: onDelete
+                        })}
+                        className="text-zinc-600 hover:text-red-500 transition-colors p-2"
+                        title="Delete Objective"
+                    >
                         <TrashIcon />
                     </button>
                 </div>
@@ -202,7 +346,48 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                         </div>
 
                         {/* Title */}
-                        <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 leading-tight">{objective.title}</h2>
+                        <div className="mb-6">
+                            {isEditingTitle ? (
+                                <div className="flex flex-col gap-2">
+                                    <input
+                                        type="text"
+                                        value={editedTitle}
+                                        onChange={(e) => setEditedTitle(e.target.value)}
+                                        className="text-2xl md:text-3xl font-bold text-white bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500/50"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleSaveTitle();
+                                            if (e.key === 'Escape') handleCancelTitle();
+                                        }}
+                                    />
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleSaveTitle}
+                                            className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <SaveIcon /> Save
+                                        </button>
+                                        <button
+                                            onClick={handleCancelTitle}
+                                            className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <XIcon /> Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-start gap-2 group">
+                                    <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight flex-1">{objective.title}</h2>
+                                    <button
+                                        onClick={() => setIsEditingTitle(true)}
+                                        className="text-zinc-600 hover:text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 mt-1"
+                                        title="Edit title"
+                                    >
+                                        <EditIcon />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Progress */}
                          <div className="mb-8 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
@@ -214,27 +399,175 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                         </div>
 
                         {/* Description */}
-                        {objective.description && (
-                            <div className="mb-8">
-                                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Description</h4>
-                                <p className="text-zinc-400 text-sm leading-relaxed">{objective.description}</p>
-                            </div>
-                        )}
+                        <div className="mb-8">
+                            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Description</h4>
+                            {isEditingDescription ? (
+                                <div className="flex flex-col gap-2">
+                                    <textarea
+                                        value={editedDescription}
+                                        onChange={(e) => setEditedDescription(e.target.value)}
+                                        className="text-sm text-white bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500/50 min-h-[80px]"
+                                        placeholder="Add a description..."
+                                        autoFocus
+                                    />
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleSaveDescription}
+                                            className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <SaveIcon /> Save
+                                        </button>
+                                        <button
+                                            onClick={handleCancelDescription}
+                                            className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <XIcon /> Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-start gap-2 group">
+                                    <p className="text-zinc-400 text-sm leading-relaxed flex-1">
+                                        {objective.description || <span className="text-zinc-600 italic">No description yet</span>}
+                                    </p>
+                                    <button
+                                        onClick={() => setIsEditingDescription(true)}
+                                        className="text-zinc-600 hover:text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                                        title="Edit description"
+                                    >
+                                        <EditIcon />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Initiatives */}
-                        {objective.initiatives && objective.initiatives.length > 0 && (
-                            <div className="mb-8">
-                                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Initiatives</h4>
-                                <ul className="space-y-2">
-                                    {objective.initiatives.map((init, i) => (
-                                        <li key={i} className="text-sm text-zinc-300 flex items-start gap-2.5 p-2 rounded hover:bg-zinc-800/30 transition-colors">
-                                            <span className="text-violet-500 mt-1 shrink-0"><CheckIcon /></span>
-                                            {init}
-                                        </li>
-                                    ))}
-                                </ul>
+                        <div className="mb-8">
+                            <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Initiatives</h4>
+                                {!isEditingInitiatives && (
+                                    <button
+                                        onClick={() => setIsEditingInitiatives(true)}
+                                        className="text-zinc-600 hover:text-violet-400 transition-colors p-1"
+                                        title="Edit initiatives"
+                                    >
+                                        <EditIcon />
+                                    </button>
+                                )}
                             </div>
-                        )}
+                            {isEditingInitiatives ? (
+                                <div className="flex flex-col gap-3">
+                                    <ul className="space-y-2">
+                                        {editedInitiatives.map((init, i) => {
+                                            const { text, url } = parseInitiative(init);
+                                            return (
+                                                <li key={i} className="text-sm text-zinc-300 flex items-start gap-2.5 p-2 rounded bg-zinc-800/30 group">
+                                                    <span className="text-violet-500 mt-1 shrink-0"><CheckIcon /></span>
+                                                    <div className="flex-1">
+                                                        <div>{text}</div>
+                                                        {url && (
+                                                            <a
+                                                                href={url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 mt-1"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <LinkIcon /> {url}
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleRemoveInitiative(i)}
+                                                        className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <XIcon />
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                    <div className="flex flex-col gap-2">
+                                        <input
+                                            type="text"
+                                            value={newInitiative}
+                                            onChange={(e) => setNewInitiative(e.target.value)}
+                                            placeholder="Initiative title..."
+                                            className="text-sm text-white bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500/50"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleAddInitiative();
+                                                }
+                                            }}
+                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="url"
+                                                value={newInitiativeUrl}
+                                                onChange={(e) => setNewInitiativeUrl(e.target.value)}
+                                                placeholder="Linear link (optional)..."
+                                                className="flex-1 text-sm text-white bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500/50"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleAddInitiative();
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                onClick={handleAddInitiative}
+                                                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-violet-400 text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                            >
+                                                <PlusIcon /> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button
+                                            onClick={handleSaveInitiatives}
+                                            className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <SaveIcon /> Save
+                                        </button>
+                                        <button
+                                            onClick={handleCancelInitiatives}
+                                            className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <XIcon /> Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {objective.initiatives && objective.initiatives.length > 0 ? (
+                                        objective.initiatives.map((init, i) => {
+                                            const { text, url } = parseInitiative(init);
+                                            return (
+                                                <li key={i} className="text-sm text-zinc-300 flex items-start gap-2.5 p-2 rounded hover:bg-zinc-800/30 transition-colors">
+                                                    <span className="text-violet-500 mt-1 shrink-0"><CheckIcon /></span>
+                                                    <div className="flex-1">
+                                                        <div>{text}</div>
+                                                        {url && (
+                                                            <a
+                                                                href={url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 mt-1"
+                                                            >
+                                                                <LinkIcon /> Linear
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })
+                                    ) : (
+                                        <li className="text-sm text-zinc-600 italic p-2">No initiatives yet</li>
+                                    )}
+                                </ul>
+                            )}
+                        </div>
 
                         {/* Direct Wins Section */}
                         <div className="border-t border-zinc-800 pt-6">
@@ -265,6 +598,12 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                                 {/* Tabs */}
                                 <div className="flex p-1 bg-zinc-900 rounded-lg border border-zinc-800">
                                     <button
+                                        onClick={() => setActiveKrTab('all')}
+                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeKrTab === 'all' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    >
+                                        All
+                                    </button>
+                                    <button
                                         onClick={() => setActiveKrTab('metrics')}
                                         className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeKrTab === 'metrics' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
                                     >
@@ -276,20 +615,22 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                                     >
                                         Win Conditions
                                     </button>
-                                    <button
-                                        onClick={() => setActiveKrTab('all')}
-                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeKrTab === 'all' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                                    >
-                                        All
-                                    </button>
                                 </div>
                             </div>
-                            <button
-                                onClick={onStartAdd}
-                                className="text-sm bg-zinc-900 hover:bg-zinc-800 text-violet-400 font-medium flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border border-zinc-800 shadow-sm"
-                            >
-                                <PlusIcon /> {activeKrTab === 'conditions' ? 'Add Condition' : 'Add Metric'}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={onStartAddMetric}
+                                    className="text-sm bg-zinc-900 hover:bg-zinc-800 text-violet-400 font-medium flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border border-zinc-800 shadow-sm"
+                                >
+                                    <PlusIcon /> Add Metric
+                                </button>
+                                <button
+                                    onClick={onStartAddCondition}
+                                    className="text-sm bg-zinc-900 hover:bg-zinc-800 text-pink-400 font-medium flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border border-zinc-800 shadow-sm"
+                                >
+                                    <PlusIcon /> Add Win Condition
+                                </button>
+                            </div>
                         </div>
 
                         {showAddKr && (
@@ -314,34 +655,44 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                                             <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider block mb-2">Type</label>
                                             <select
                                                 value={newKrType}
-                                                onChange={(e) => setNewKrType(e.target.value as KeyResultType)}
+                                                onChange={(e) => {
+                                                    const type = e.target.value as KeyResultType;
+                                                    setNewKrType(type);
+                                                    if (type === 'win_condition') {
+                                                        setNewKrTarget(999999);
+                                                        setNewKrUnit('wins');
+                                                    }
+                                                }}
                                                 className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
                                             >
-                                                <option value="standard">Standard Metric</option>
                                                 <option value="leading">Leading Indicator</option>
                                                 <option value="lagging">Lagging Indicator</option>
                                                 <option value="win_condition">Win Condition</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider block mb-2">Target Value</label>
-                                            <input
-                                                type="number"
-                                                value={newKrTarget}
-                                                onChange={(e) => setNewKrTarget(Number(e.target.value))}
-                                                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-sm text-white"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider block mb-2">Unit</label>
-                                            <input
-                                                type="text"
-                                                value={newKrUnit}
-                                                onChange={(e) => setNewKrUnit(e.target.value)}
-                                                placeholder="%"
-                                                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-sm text-white"
-                                            />
-                                        </div>
+                                        {newKrType !== 'win_condition' && (
+                                            <>
+                                                <div>
+                                                    <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider block mb-2">Target Value</label>
+                                                    <input
+                                                        type="number"
+                                                        value={newKrTarget}
+                                                        onChange={(e) => setNewKrTarget(Number(e.target.value))}
+                                                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-sm text-white"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider block mb-2">Unit</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newKrUnit}
+                                                        onChange={(e) => setNewKrUnit(e.target.value)}
+                                                        placeholder="%"
+                                                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-sm text-white"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                     <div className="flex justify-end gap-3 pt-2">
                                         <button
@@ -379,6 +730,35 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                                         onUpdate={updateKeyResult}
                                         onDelete={() => deleteKeyResult(kr.id)}
                                         people={people}
+                                        onLogWin={async (krId, note, attributedTo) => {
+                                            try {
+                                                await api.createWinLog(note, attributedTo, undefined, krId);
+                                                const newCount = (kr.winLog?.length || 0) + 1;
+                                                await api.updateKeyResultProgress(krId, newCount);
+                                                const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                                                onUpdate(refreshed);
+                                            } catch (error) {
+                                                console.error('Error logging win:', error);
+                                            }
+                                        }}
+                                        onDeleteWin={(winId) => {
+                                            setConfirmModal({
+                                                isOpen: true,
+                                                title: 'Delete Win',
+                                                message: 'Are you sure you want to delete this win? This action cannot be undone.',
+                                                onConfirm: async () => {
+                                                    try {
+                                                        await api.deleteWinLog(winId);
+                                                        const newCount = Math.max(0, (kr.winLog?.length || 0) - 1);
+                                                        await api.updateKeyResultProgress(kr.id, newCount);
+                                                        const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                                                        onUpdate(refreshed);
+                                                    } catch (error) {
+                                                        console.error('Error deleting win:', error);
+                                                    }
+                                                }
+                                            });
+                                        }}
                                     />
                                 ))
                             )}
@@ -386,6 +766,15 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Confirmation Modal */}
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+            />
         </div>
     );
 };

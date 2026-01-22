@@ -16,7 +16,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ objectives }) => {
     const totalWins = objWins + krWins;
 
     const totalProgress = objectives.reduce((acc, obj) => {
-         const objProg = obj.keyResults.length === 0 ? 0 : obj.keyResults.reduce((kAcc, kr) => kAcc + (kr.target === 0 ? 0 : Math.min(100, (kr.current / kr.target) * 100)), 0) / obj.keyResults.length;
+         const metricsOnly = obj.keyResults.filter(kr => kr.type !== 'win_condition');
+         const objProg = metricsOnly.length === 0 ? 0 : metricsOnly.reduce((kAcc, kr) => kAcc + (kr.target === 0 ? 0 : Math.min(100, (kr.current / kr.target) * 100)), 0) / metricsOnly.length;
          return acc + objProg;
     }, 0) / (objectives.length || 1);
 

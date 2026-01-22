@@ -1,4 +1,5 @@
-export type KeyResultType = 'standard' | 'leading' | 'lagging' | 'win_condition';
+export type KeyResultType = 'leading' | 'lagging' | 'win_condition';
+export type ObjectiveType = 'okr' | 'goal';
 
 export interface Person {
     id: string;
@@ -27,9 +28,11 @@ export interface KeyResult {
 export interface Objective {
     id: string;
     title: string;
+    type: ObjectiveType;
     category?: string;
     description?: string;
     initiatives?: string[];
+    order?: number;
     keyResults: KeyResult[];
     wins?: WinLog[]; // Direct wins for the objective
 }
