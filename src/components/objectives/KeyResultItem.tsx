@@ -87,14 +87,40 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
   const handleSaveDetails = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (editedTitle.trim()) {
-      onUpdate({
-        ...kr,
+      const updates: Partial<KeyResult> = {
         title: editedTitle.trim(),
-        unit: editedUnit.trim(),
         type: editedType
-      });
+      };
+
+      // Handle conversion to/from win_condition
+      if (editedType === 'win_condition' && kr.type !== 'win_condition') {
+        // Converting TO win_condition
+        updates.unit = 'wins';
+        updates.target = 999999;
+        updates.current = kr.winLog?.length || 0;
+      } else if (editedType !== 'win_condition' && kr.type === 'win_condition') {
+        // Converting FROM win_condition to metric
+        updates.unit = editedUnit.trim() || '%';
+        updates.target = 100;
+        updates.current = 0;
+      } else {
+        updates.unit = editedUnit.trim();
+      }
+
+      onUpdate({ ...kr, ...updates });
     }
     setIsEditingDetails(false);
+  };
+
+  const handleConvertToWinCondition = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onUpdate({
+      ...kr,
+      type: 'win_condition',
+      unit: 'wins',
+      target: 999999,
+      current: kr.winLog?.length || 0
+    });
   };
 
   const handleCancelEditDetails = (e: React.MouseEvent) => {
@@ -202,6 +228,15 @@ export const KeyResultItem: React.FC<KeyResultItemProps> = ({
                    {isWinCondition ? 'Log Progress' : 'Update Metrics'}
                </label>
                <div className="flex items-center gap-2">
+                 {!isWinCondition && (
+                   <button
+                    onClick={handleConvertToWinCondition}
+                    className="text-zinc-600 hover:text-pink-400 text-xs transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-zinc-800"
+                    title="Convert to win condition"
+                   >
+                     <TrophyIcon /> Make Win Condition
+                   </button>
+                 )}
                  <button
                   onClick={handleStartEditDetails}
                   className="text-zinc-600 hover:text-violet-400 text-xs transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-zinc-800"
