@@ -42,3 +42,6 @@ prisma/migrations
 # Original large file (root level only)
 /index.tsx
 app.zip
+
+# MCP config
+.mcp.json
