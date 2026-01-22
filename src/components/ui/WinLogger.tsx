@@ -94,11 +94,11 @@ export const WinLogger: React.FC<WinLoggerProps> = ({ onLog, people, placeholder
                          <select
                             value={selectedConditionId}
                             onChange={(e) => setSelectedConditionId(e.target.value)}
-                            className="bg-transparent text-xs text-zinc-300 flex-1 focus:outline-none focus:text-white cursor-pointer"
+                            className="bg-zinc-800 text-xs text-zinc-300 flex-1 focus:outline-none focus:text-white cursor-pointer rounded px-2 py-1 border border-zinc-700"
                          >
-                             <option value="">General Objective Win</option>
+                             <option value="" className="bg-zinc-800 text-zinc-300">General Objective Win</option>
                              {winConditions.map(wc => (
-                                 <option key={wc.id} value={wc.id}>{wc.title}</option>
+                                 <option key={wc.id} value={wc.id} className="bg-zinc-800 text-zinc-300">{wc.title}</option>
                              ))}
                          </select>
                     </div>
