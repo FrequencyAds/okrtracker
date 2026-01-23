@@ -6,9 +6,10 @@ import { TrophyIcon, TargetIcon } from '../icons';
 interface DashboardViewProps {
     objectives: Objective[];
     onObjectiveClick?: (id: string) => void;
+    onCategoryClick?: (category: string) => void;
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ objectives, onObjectiveClick }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({ objectives, onObjectiveClick, onCategoryClick }) => {
     // Metrics
     const totalObjectives = objectives.length;
     const totalKRs = objectives.reduce((acc, obj) => acc + obj.keyResults.length, 0);
@@ -71,7 +72,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ objectives, onObje
             <h3 className="text-lg font-bold text-zinc-300 mb-4">Breakdown by Department</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
                 {categoryStats.map(stat => (
-                    <div key={stat.cat} className="bg-zinc-900/50 border border-zinc-800/50 p-4 rounded-xl flex items-center justify-between">
+                    <div
+                        key={stat.cat}
+                        onClick={() => onCategoryClick?.(stat.cat)}
+                        className="bg-zinc-900/50 border border-zinc-800/50 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-zinc-800/50 hover:border-zinc-700/50 transition-colors"
+                    >
                          <div>
                              <div className="text-sm font-bold text-white mb-1">{stat.cat}</div>
                              <div className="text-xs text-zinc-500">{stat.count} Objectives</div>
