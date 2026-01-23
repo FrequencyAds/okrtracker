@@ -22,7 +22,7 @@ const App = () => {
   const [people, setPeople] = useState<Person[]>([]);
 
   // App Logic State
-  const [view, setView] = useState<'dashboard' | 'okrs' | 'goals' | 'wins'>('okrs');
+  const [view, setView] = useState<'dashboard' | 'okrs' | 'goals' | 'wins'>('dashboard');
 
   // OKR View State
   const [isAddingObj, setIsAddingObj] = useState(false);
