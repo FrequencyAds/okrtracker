@@ -1,14 +1,44 @@
-import React, { useMemo } from 'react';
-import { Objective, Person } from '../../types';
+import React, { useMemo, useState } from 'react';
+import { Objective, Person, KeyResult } from '../../types';
 import { TrophyIcon } from '../icons';
 import { Avatar } from '../ui/SharedComponents';
+import { WinLogger } from '../ui/WinLogger';
 
 interface WinsFeedViewProps {
     objectives: Objective[];
     people: Person[];
+    onLogWin?: (note: string, attributedTo: string[], objectiveId?: string, keyResultId?: string) => void;
 }
 
-export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people }) => {
+export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people, onLogWin }) => {
+    const [selectedObjectiveId, setSelectedObjectiveId] = useState<string>("");
+
+    // Get all objectives for the dropdown
+    const objectiveOptions = useMemo(() => {
+        return objectives.map(obj => ({
+            id: obj.id,
+            title: obj.title,
+            category: obj.category,
+            winConditions: obj.keyResults.filter(kr => kr.type === 'win_condition')
+        }));
+    }, [objectives]);
+
+    // Get win conditions for selected objective
+    const selectedObjective = objectiveOptions.find(o => o.id === selectedObjectiveId);
+    const winConditions = selectedObjective?.winConditions || [];
+
+    const handleLogWin = (note: string, attributedTo: string[], linkedConditionId?: string) => {
+        if (onLogWin) {
+            if (linkedConditionId) {
+                // Log to specific win condition
+                onLogWin(note, attributedTo, undefined, linkedConditionId);
+            } else if (selectedObjectiveId) {
+                // Log to objective
+                onLogWin(note, attributedTo, selectedObjectiveId, undefined);
+            }
+        }
+        setSelectedObjectiveId("");
+    };
 
     // Flatten all wins
     const allWins = useMemo(() => {
@@ -56,9 +86,39 @@ export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people }
 
     return (
         <div className="max-w-3xl mx-auto py-4 animate-in slide-in-from-bottom-4">
-             <h2 className="text-2xl font-bold text-white mb-8 flex items-center gap-3">
+             <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
                  <span className="text-yellow-500"><TrophyIcon /></span> Activity Feed
              </h2>
+
+             {/* Add Win Form */}
+             {onLogWin && (
+                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-8">
+                     <h3 className="text-sm font-bold text-zinc-400 mb-4">Log a Win</h3>
+                     <div className="flex flex-col gap-3">
+                         <select
+                             value={selectedObjectiveId}
+                             onChange={(e) => setSelectedObjectiveId(e.target.value)}
+                             className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-violet-500/50"
+                         >
+                             <option value="" className="bg-zinc-800">Select an objective...</option>
+                             {objectiveOptions.map(obj => (
+                                 <option key={obj.id} value={obj.id} className="bg-zinc-800">
+                                     [{obj.category}] {obj.title}
+                                 </option>
+                             ))}
+                         </select>
+                         {selectedObjectiveId && (
+                             <WinLogger
+                                 onLog={handleLogWin}
+                                 people={people}
+                                 placeholder="What did you achieve?"
+                                 buttonLabel="Log Win"
+                                 winConditions={winConditions}
+                             />
+                         )}
+                     </div>
+                 </div>
+             )}
              <div className="relative border-l border-zinc-800 ml-4 space-y-8">
                  {allWins.map((win, idx) => (
                      <div key={win.id} className="relative pl-8">

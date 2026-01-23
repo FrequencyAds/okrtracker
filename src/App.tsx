@@ -371,7 +371,33 @@ const App = () => {
         )}
 
         {view === 'wins' && (
-            <WinsFeedView objectives={[...okrs, ...goals]} people={people} />
+            <WinsFeedView
+                objectives={[...okrs, ...goals]}
+                people={people}
+                onLogWin={async (note, attributedTo, objectiveId, keyResultId) => {
+                    try {
+                        await api.createWinLog(note, attributedTo, objectiveId, keyResultId);
+
+                        // If logging to a key result, update its current count
+                        if (keyResultId) {
+                            const allObjs = [...okrs, ...goals];
+                            for (const obj of allObjs) {
+                                const kr = obj.keyResults.find(k => k.id === keyResultId);
+                                if (kr) {
+                                    const newCount = (kr.winLog?.length || 0) + 1;
+                                    await api.updateKeyResultProgress(keyResultId, newCount);
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Reload data
+                        loadData();
+                    } catch (error) {
+                        console.error('Error logging win:', error);
+                    }
+                }}
+            />
         )}
 
       </main>
