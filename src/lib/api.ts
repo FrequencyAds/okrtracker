@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Objective, Person, KeyResult, WinLog, ObjectiveType } from '../types';
+import { Objective, Person, KeyResult, WinLog, ObjectiveType, ObjectiveStatus } from '../types';
 
 // ==================== People ====================
 
@@ -83,6 +83,7 @@ export const fetchObjectives = async (type?: ObjectiveType): Promise<Objective[]
     id: obj.id,
     title: obj.title,
     type: obj.type as ObjectiveType,
+    status: (obj.status as ObjectiveStatus) || 'new',
     category: obj.category,
     description: obj.description,
     initiatives: obj.initiatives || [],
@@ -130,6 +131,7 @@ export const createObjective = async (objective: Omit<Objective, 'id' | 'keyResu
       user_id: users?.id || '00000000-0000-0000-0000-000000000001',
       title: objective.title,
       type: objective.type,
+      status: 'new',
       category: objective.category,
       description: objective.description,
       initiatives: objective.initiatives || [],
@@ -144,6 +146,7 @@ export const createObjective = async (objective: Omit<Objective, 'id' | 'keyResu
     id: data.id,
     title: data.title,
     type: data.type as ObjectiveType,
+    status: (data.status as ObjectiveStatus) || 'new',
     category: data.category,
     description: data.description,
     initiatives: data.initiatives || [],
@@ -159,6 +162,7 @@ export const updateObjective = async (objective: Objective): Promise<void> => {
     .update({
       title: objective.title,
       type: objective.type,
+      status: objective.status,
       category: objective.category,
       description: objective.description,
       initiatives: objective.initiatives
@@ -325,6 +329,7 @@ export const fetchObjectiveWithDetails = async (objectiveId: string): Promise<Ob
     id: obj.id,
     title: obj.title,
     type: obj.type as ObjectiveType,
+    status: (obj.status as ObjectiveStatus) || 'new',
     category: obj.category,
     description: obj.description,
     initiatives: obj.initiatives || [],

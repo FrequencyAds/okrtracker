@@ -1,5 +1,6 @@
 export type KeyResultType = 'leading' | 'lagging' | 'win_condition';
 export type ObjectiveType = 'okr' | 'goal';
+export type ObjectiveStatus = 'new' | 'on_track' | 'at_risk';
 
 export interface Person {
     id: string;
@@ -30,6 +31,7 @@ export interface Objective {
     id: string;
     title: string;
     type: ObjectiveType;
+    status?: ObjectiveStatus;
     category?: string;
     description?: string;
     initiatives?: string[];

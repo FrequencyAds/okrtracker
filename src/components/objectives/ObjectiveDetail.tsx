@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Objective, Person, KeyResult, KeyResultType, WinLog } from '../../types';
+import { Objective, Person, KeyResult, KeyResultType, WinLog, ObjectiveStatus } from '../../types';
 import { CloseIcon, ChevronLeft, ChevronRight, TrophyIcon, TrashIcon, PlusIcon, CheckIcon, EditIcon, SaveIcon, XIcon, LinkIcon, GripVerticalIcon } from '../icons';
 import { ProgressBar } from '../ui/SharedComponents';
 import { WinLogger, WinList } from '../ui/WinLogger';
@@ -548,12 +548,37 @@ export const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                 <div className="lg:w-1/3 lg:border-r border-zinc-800 flex flex-col bg-zinc-900/10 overflow-y-auto">
                     <div className="p-8">
                         {/* Meta Tags */}
-                        <div className="flex gap-2 mb-4">
+                        <div className="flex gap-2 mb-4 flex-wrap">
                             {objective.category && (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-zinc-800 text-zinc-400 border border-zinc-700/50">
                                     {objective.category}
                                 </span>
                             )}
+                            {/* Status Dropdown */}
+                            <select
+                                value={objective.status || 'new'}
+                                onChange={async (e) => {
+                                    const newStatus = e.target.value as ObjectiveStatus;
+                                    try {
+                                        await api.updateObjective({ ...objective, status: newStatus });
+                                        const refreshed = await api.fetchObjectiveWithDetails(objective.id);
+                                        onUpdate(refreshed);
+                                    } catch (error) {
+                                        console.error('Error updating status:', error);
+                                    }
+                                }}
+                                className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider border cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500/50 ${
+                                    objective.status === 'on_track'
+                                        ? 'bg-emerald-900/30 text-emerald-400 border-emerald-700/50'
+                                        : objective.status === 'at_risk'
+                                        ? 'bg-red-900/30 text-red-400 border-red-700/50'
+                                        : 'bg-blue-900/30 text-blue-400 border-blue-700/50'
+                                }`}
+                            >
+                                <option value="new">New</option>
+                                <option value="on_track">On Track</option>
+                                <option value="at_risk">At Risk</option>
+                            </select>
                         </div>
 
                         {/* Title */}
