@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { BrowserRouter, Routes, Route, useNavigate, useParams, useLocation, Navigate, Link } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { Objective, Person } from './types';
@@ -14,21 +15,31 @@ import { WinsFeedView } from './components/views/WinsFeedView';
 import { AuthForm } from './components/auth/AuthForm';
 import * as api from './lib/api';
 
-const App = () => {
+// Main app content with routing
+const AppContent = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id: objectiveIdParam } = useParams<{ id: string }>();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [okrs, setOkrs] = useState<Objective[]>([]);
   const [goals, setGoals] = useState<Objective[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
 
-  // App Logic State
-  const [view, setView] = useState<'dashboard' | 'okrs' | 'goals' | 'wins'>('dashboard');
+  // Determine current view from URL path
+  const currentPath = location.pathname;
+  const view = currentPath.startsWith('/okrs') ? 'okrs'
+    : currentPath.startsWith('/goals') ? 'goals'
+    : currentPath.startsWith('/wins') ? 'wins'
+    : 'dashboard';
 
   // OKR View State
   const [isAddingObj, setIsAddingObj] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
-  const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
+
+  // Get selected objective ID from URL param
+  const selectedObjectiveId = objectiveIdParam || null;
 
   // Form State
   const [newObjTitle, setNewObjTitle] = useState("");
@@ -137,11 +148,11 @@ const App = () => {
 
       if (isGoal) {
         setGoals(goals.filter((o) => o.id !== id));
+        navigate('/goals');
       } else {
         setOkrs(okrs.filter((o) => o.id !== id));
+        navigate('/okrs');
       }
-
-      setSelectedObjectiveId(null);
     } catch (error) {
       console.error('Error deleting objective:', error);
     }
@@ -237,7 +248,27 @@ const App = () => {
       let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
 
       if (nextIndex >= 0 && nextIndex < filteredObjectivesForReview.length) {
-          setSelectedObjectiveId(filteredObjectivesForReview[nextIndex].id);
+          const nextObj = filteredObjectivesForReview[nextIndex];
+          const basePath = nextObj.type === 'goal' ? '/goals' : '/okrs';
+          navigate(`${basePath}/${nextObj.id}`);
+      }
+  };
+
+  // Helper to navigate to an objective
+  const handleObjectiveClick = (id: string) => {
+      const obj = [...okrs, ...goals].find(o => o.id === id);
+      if (obj) {
+          const basePath = obj.type === 'goal' ? '/goals' : '/okrs';
+          navigate(`${basePath}/${id}`);
+      }
+  };
+
+  // Helper to close the modal and go back to the list
+  const handleCloseObjective = () => {
+      if (selectedObjective?.type === 'goal') {
+          navigate('/goals');
+      } else {
+          navigate('/okrs');
       }
   };
 
@@ -271,30 +302,30 @@ const App = () => {
 
                       {/* Top Level Nav Links */}
                       <nav className="hidden md:flex items-center gap-6">
-                          <button
-                            onClick={() => setView('dashboard')}
+                          <Link
+                            to="/dashboard"
                             className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'dashboard' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                           >
                              <LayoutDashboardIcon /> Dashboard
-                          </button>
-                          <button
-                            onClick={() => setView('okrs')}
+                          </Link>
+                          <Link
+                            to="/okrs"
                             className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'okrs' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                           >
                              <TargetIcon /> OKRs
-                          </button>
-                          <button
-                            onClick={() => setView('goals')}
+                          </Link>
+                          <Link
+                            to="/goals"
                             className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'goals' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                           >
                              <TargetIcon /> Goals
-                          </button>
-                           <button
-                            onClick={() => setView('wins')}
+                          </Link>
+                          <Link
+                            to="/wins"
                             className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'wins' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                           >
                              <TrophyIcon /> Wins
-                          </button>
+                          </Link>
                       </nav>
                   </div>
 
@@ -324,10 +355,10 @@ const App = () => {
         {view === 'dashboard' && (
             <DashboardView
                 objectives={[...okrs, ...goals]}
-                onObjectiveClick={setSelectedObjectiveId}
+                onObjectiveClick={handleObjectiveClick}
                 onCategoryClick={(category) => {
                     setActiveTab(category);
-                    setView('okrs');
+                    navigate('/okrs');
                 }}
             />
         )}
@@ -338,7 +369,7 @@ const App = () => {
                 categories={CATEGORIES}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
-                onObjectiveClick={setSelectedObjectiveId}
+                onObjectiveClick={(id) => navigate(`/okrs/${id}`)}
                 isAddingObj={isAddingObj}
                 setIsAddingObj={setIsAddingObj}
                 handleAddObjective={handleAddObjective}
@@ -357,7 +388,7 @@ const App = () => {
                 categories={CATEGORIES}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
-                onObjectiveClick={setSelectedObjectiveId}
+                onObjectiveClick={(id) => navigate(`/goals/${id}`)}
                 isAddingObj={isAddingObj}
                 setIsAddingObj={setIsAddingObj}
                 handleAddObjective={handleAddObjective}
@@ -405,7 +436,7 @@ const App = () => {
       {/* Review Mode / Detail Modal */}
       <Modal
         isOpen={!!selectedObjectiveId}
-        onClose={() => setSelectedObjectiveId(null)}
+        onClose={handleCloseObjective}
       >
           {selectedObjective && (
               <ObjectiveDetail
@@ -413,7 +444,7 @@ const App = () => {
                   people={people}
                   onUpdate={updateObjective}
                   onDelete={() => deleteObjective(selectedObjective.id)}
-                  onClose={() => setSelectedObjectiveId(null)}
+                  onClose={handleCloseObjective}
                   onNext={() => navigateObjectives('next')}
                   onPrev={() => navigateObjectives('prev')}
                   hasPrev={currentReviewIndex > 0}
@@ -433,6 +464,24 @@ const App = () => {
       />
 
     </div>
+  );
+};
+
+// Root App component with router
+const App = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<AppContent />} />
+        <Route path="/okrs" element={<AppContent />} />
+        <Route path="/okrs/:id" element={<AppContent />} />
+        <Route path="/goals" element={<AppContent />} />
+        <Route path="/goals/:id" element={<AppContent />} />
+        <Route path="/wins" element={<AppContent />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 

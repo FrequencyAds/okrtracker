@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Objective, Person, KeyResult } from '../../types';
 import { TrophyIcon } from '../icons';
 import { Avatar } from '../ui/SharedComponents';
@@ -44,14 +45,16 @@ export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people, 
     const allWins = useMemo(() => {
         let wins: any[] = [];
         objectives.forEach(obj => {
+            const basePath = obj.type === 'goal' ? '/goals' : '/okrs';
             // Objective wins
             if (obj.wins) {
                 obj.wins.forEach(w => wins.push({
                     ...w,
-                    type: 'Objective',
+                    winType: 'Objective',
                     sourceTitle: obj.title,
                     category: obj.category,
-                    objId: obj.id
+                    objId: obj.id,
+                    objLink: `${basePath}/${obj.id}`
                 }));
             }
             // KR wins
@@ -59,11 +62,12 @@ export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people, 
                 if (kr.winLog) {
                     kr.winLog.forEach(w => wins.push({
                         ...w,
-                        type: 'Key Result',
+                        winType: 'Key Result',
                         sourceTitle: kr.title,
                         parentTitle: obj.title,
                         category: obj.category,
-                        objId: obj.id
+                        objId: obj.id,
+                        objLink: `${basePath}/${obj.id}`
                     }));
                 }
             });
@@ -125,7 +129,7 @@ export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people, 
                          {/* Timeline Dot */}
                          <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-zinc-800 border-2 border-zinc-950 ring-2 ring-zinc-800"></div>
 
-                         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
+                         <Link to={win.objLink} className="block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
                              <div className="flex justify-between items-start mb-2">
                                  <div className="flex items-center gap-2">
                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${win.category === 'Company' ? 'bg-violet-900/30 text-violet-400 border border-violet-800/50' : 'bg-zinc-800 text-zinc-500 border border-zinc-700/50'}`}>
@@ -139,7 +143,7 @@ export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people, 
                              <div className="mb-3">
                                  <p className="text-zinc-200 text-lg leading-snug mb-2">{win.note}</p>
                                  <div className="text-xs text-zinc-500 bg-zinc-950/50 p-2 rounded border border-zinc-800/50 inline-block">
-                                     <span className="font-bold text-zinc-400">{win.type === 'Objective' ? 'Objective Win' : 'Metric Update'}:</span> {win.sourceTitle}
+                                     <span className="font-bold text-zinc-400">{win.winType === 'Objective' ? 'Objective Win' : 'Metric Update'}:</span> {win.sourceTitle}
                                      {win.parentTitle && <span className="block mt-1 text-zinc-600">↳ {win.parentTitle}</span>}
                                  </div>
                              </div>
@@ -153,7 +157,7 @@ export const WinsFeedView: React.FC<WinsFeedViewProps> = ({ objectives, people, 
                                     {(!win.attributedTo || win.attributedTo.length === 0) && <span className="text-xs text-zinc-600 italic">No attribution</span>}
                                 </div>
                              </div>
-                         </div>
+                         </Link>
                      </div>
                  ))}
              </div>

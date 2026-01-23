@@ -42,7 +42,7 @@ export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
   return (
     <div
         onClick={onClick}
-        className={`bg-zinc-900 border ${isCompany ? 'border-violet-900/50 shadow-violet-900/10' : 'border-zinc-800'} rounded-xl overflow-hidden mb-4 shadow-sm transition-all hover:border-zinc-600 cursor-pointer group relative`}
+        className={`bg-zinc-900 border ${isCompany ? 'border-violet-900/50 shadow-violet-900/10' : 'border-zinc-800'} rounded-xl mb-4 shadow-sm transition-all hover:border-zinc-600 cursor-pointer group relative`}
     >
       {isCompany && (
           <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-violet-500 to-violet-700"></div>
@@ -71,7 +71,7 @@ export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
                             <div className="p-1 text-zinc-600 hover:text-zinc-400 transition-colors cursor-help">
                                 <InfoIcon />
                             </div>
-                            <div className="absolute left-0 top-6 w-64 p-3 bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl text-xs text-zinc-400 z-20 hidden group-hover/info:block animate-in fade-in zoom-in-95 pointer-events-none">
+                            <div className="absolute left-0 top-6 w-96 max-w-[90vw] p-3 bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl text-xs text-zinc-400 z-50 hidden group-hover/info:block animate-in fade-in zoom-in-95 pointer-events-none whitespace-normal">
                                 {objective.description}
                             </div>
                         </div>
