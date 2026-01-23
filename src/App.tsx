@@ -47,10 +47,28 @@ const AppContent = () => {
 
   // Check auth session on mount
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Handle OAuth callback - check for code in URL
+    const handleAuthCallback = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      if (code) {
+        // Exchange the code for a session
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error('Error exchanging code for session:', error);
+        }
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+
+      // Now get the session
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setLoading(false);
-    });
+    };
+
+    handleAuthCallback();
 
     const {
       data: { subscription },
