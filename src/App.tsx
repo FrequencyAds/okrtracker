@@ -51,19 +51,35 @@ const AppContent = () => {
     const handleAuthCallback = async () => {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
+      const error_param = params.get('error');
+      const error_description = params.get('error_description');
+
+      // Log OAuth errors from URL
+      if (error_param) {
+        console.error('OAuth error:', error_param, error_description);
+        alert(`Auth error: ${error_description || error_param}`);
+      }
 
       if (code) {
+        console.log('Got auth code, exchanging for session...');
         // Exchange the code for a session
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
           console.error('Error exchanging code for session:', error);
+          alert(`Session error: ${error.message}`);
+        } else {
+          console.log('Session exchange successful:', data);
         }
         // Clean up URL
         window.history.replaceState({}, '', window.location.pathname);
       }
 
       // Now get the session
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('Error getting session:', sessionError);
+      }
+      console.log('Current session:', session ? 'exists' : 'null');
       setSession(session);
       setLoading(false);
     };
