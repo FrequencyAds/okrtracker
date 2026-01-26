@@ -6,6 +6,7 @@
     { "source": "/goals", "destination": "/index.html" },
     { "source": "/goals/:id", "destination": "/index.html" },
     { "source": "/wins", "destination": "/index.html" },
+    { "source": "/settings", "destination": "/index.html" },
     { "source": "/auth/callback", "destination": "/index.html" }
   ]
 }
