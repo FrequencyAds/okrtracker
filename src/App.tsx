@@ -3,14 +3,14 @@ import { BrowserRouter, Routes, Route, useNavigate, useParams, useLocation, Navi
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { Objective, Person, Category } from './types';
-import { LayoutDashboardIcon, TargetIcon, TrophyIcon, UsersIcon } from './components/icons';
+import { LayoutDashboardIcon, TargetIcon, TrophyIcon, SettingsIcon } from './components/icons';
 import { Modal } from './components/ui/Modal';
-import { SettingsModal } from './components/settings/SettingsModal';
 import { ObjectiveDetail } from './components/objectives/ObjectiveDetail';
 import { DashboardView } from './components/views/DashboardView';
 import { OkrsView } from './components/views/OkrsView';
 import { GoalsView } from './components/views/GoalsView';
 import { WinsFeedView } from './components/views/WinsFeedView';
+import { SettingsView } from './components/views/SettingsView';
 import { AuthForm } from './components/auth/AuthForm';
 import * as api from './lib/api';
 
@@ -31,11 +31,11 @@ const AppContent = () => {
   const view = currentPath.startsWith('/okrs') ? 'okrs'
     : currentPath.startsWith('/goals') ? 'goals'
     : currentPath.startsWith('/wins') ? 'wins'
+    : currentPath.startsWith('/settings') ? 'settings'
     : 'dashboard';
 
   // OKR View State
   const [isAddingObj, setIsAddingObj] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
 
   // Get selected objective ID from URL param
@@ -364,18 +364,17 @@ const AppContent = () => {
                           >
                              <TrophyIcon /> Wins
                           </Link>
+                          <Link
+                            to="/settings"
+                            className={`flex items-center gap-2 text-sm font-medium transition-colors ${view === 'settings' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                          >
+                             <SettingsIcon /> Settings
+                          </Link>
                       </nav>
                   </div>
 
                   <div className="flex items-center gap-3">
                       <span className="text-xs text-zinc-500">{session.user.email}</span>
-                      <button
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="p-2 text-zinc-500 hover:text-white transition-colors"
-                        title="Team Settings"
-                      >
-                          <UsersIcon />
-                      </button>
                       <button
                         onClick={handleSignOut}
                         className="text-xs text-zinc-500 hover:text-white px-3 py-2 rounded-lg transition-colors"
@@ -469,6 +468,17 @@ const AppContent = () => {
             />
         )}
 
+        {view === 'settings' && (
+            <SettingsView
+                people={people}
+                onAddPerson={handleAddPerson}
+                onDeletePerson={handleDeletePerson}
+                categories={categories}
+                onAddCategory={handleAddCategory}
+                onDeleteCategory={handleDeleteCategory}
+            />
+        )}
+
       </main>
 
       {/* Review Mode / Detail Modal */}
@@ -491,19 +501,6 @@ const AppContent = () => {
           )}
       </Modal>
 
-      {/* Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        people={people}
-        setPeople={setPeople}
-        onAddPerson={handleAddPerson}
-        onDeletePerson={handleDeletePerson}
-        categories={categories}
-        setCategories={setCategories}
-        onAddCategory={handleAddCategory}
-        onDeleteCategory={handleDeleteCategory}
-      />
 
     </div>
   );
@@ -602,6 +599,7 @@ const App = () => {
         <Route path="/goals" element={<AppContent />} />
         <Route path="/goals/:id" element={<AppContent />} />
         <Route path="/wins" element={<AppContent />} />
+        <Route path="/settings" element={<AppContent />} />
         <Route path="*" element={<AppContent />} />
       </Routes>
     </BrowserRouter>
