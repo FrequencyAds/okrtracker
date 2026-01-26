@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useParams, useLocation, Navigate, Link } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
-import { Objective, Person } from './types';
-import { CATEGORIES } from './constants/defaultData';
+import { Objective, Person, Category } from './types';
 import { LayoutDashboardIcon, TargetIcon, TrophyIcon, UsersIcon } from './components/icons';
 import { Modal } from './components/ui/Modal';
 import { SettingsModal } from './components/settings/SettingsModal';
@@ -25,6 +24,7 @@ const AppContent = () => {
   const [okrs, setOkrs] = useState<Objective[]>([]);
   const [goals, setGoals] = useState<Objective[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // Determine current view from URL path
   const currentPath = location.pathname;
@@ -78,15 +78,17 @@ const AppContent = () => {
       // Ensure user exists in database on login/signup
       await api.ensureUserExists();
 
-      const [okrsData, goalsData, peopleData] = await Promise.all([
+      const [okrsData, goalsData, peopleData, categoriesData] = await Promise.all([
         api.fetchObjectives('okr'),
         api.fetchObjectives('goal'),
-        api.fetchPeople()
+        api.fetchPeople(),
+        api.fetchCategories()
       ]);
 
       setOkrs(okrsData);
       setGoals(goalsData);
       setPeople(peopleData);
+      setCategories(categoriesData);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -183,6 +185,28 @@ const AppContent = () => {
       setPeople(people.filter(p => p.id !== id));
     } catch (error) {
       console.error('Error deleting person:', error);
+    }
+  };
+
+  const handleAddCategory = async (name: string) => {
+    if (!session?.user) return;
+
+    try {
+      const newCategory = await api.createCategory(name);
+      setCategories([...categories, newCategory]);
+      return newCategory;
+    } catch (error) {
+      console.error('Error creating category:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      await api.deleteCategory(id);
+      setCategories(categories.filter(c => c.id !== id));
+    } catch (error) {
+      console.error('Error deleting category:', error);
     }
   };
 
@@ -380,7 +404,7 @@ const AppContent = () => {
         {view === 'okrs' && (
             <OkrsView
                 objectives={okrs}
-                categories={CATEGORIES}
+                categories={['All', ...categories.map(c => c.name)]}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 onObjectiveClick={(id) => navigate(`/okrs/${id}`)}
@@ -399,7 +423,7 @@ const AppContent = () => {
         {view === 'goals' && (
             <GoalsView
                 objectives={goals}
-                categories={CATEGORIES}
+                categories={['All', ...categories.map(c => c.name)]}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 onObjectiveClick={(id) => navigate(`/goals/${id}`)}
@@ -475,6 +499,10 @@ const AppContent = () => {
         setPeople={setPeople}
         onAddPerson={handleAddPerson}
         onDeletePerson={handleDeletePerson}
+        categories={categories}
+        setCategories={setCategories}
+        onAddCategory={handleAddCategory}
+        onDeleteCategory={handleDeleteCategory}
       />
 
     </div>

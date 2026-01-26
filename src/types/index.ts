@@ -2,6 +2,12 @@ export type KeyResultType = 'leading' | 'lagging' | 'win_condition';
 export type ObjectiveType = 'okr' | 'goal';
 export type ObjectiveStatus = 'new' | 'on_track' | 'at_risk';
 
+export interface Category {
+    id: string;
+    name: string;
+    order: number;
+}
+
 export interface Person {
     id: string;
     name: string;

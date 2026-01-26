@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Objective, Person, KeyResult, WinLog, ObjectiveType, ObjectiveStatus } from '../types';
+import { Objective, Person, KeyResult, WinLog, ObjectiveType, ObjectiveStatus, Category } from '../types';
 
 // ==================== User ====================
 
@@ -434,6 +434,82 @@ export const updateObjectivesOrder = async (objectiveOrders: { id: string; order
       .update(updateData)
       .eq('id', id)
   });
+
+  const results = await Promise.all(updates);
+
+  const errors = results.filter(r => r.error);
+  if (errors.length > 0) {
+    throw errors[0].error;
+  }
+};
+
+// ==================== Categories ====================
+
+export const fetchCategories = async (): Promise<Category[]> => {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .is('deleted_at', null)
+    .order('order', { ascending: true });
+
+  if (error) throw error;
+
+  return data.map(c => ({
+    id: c.id,
+    name: c.name,
+    order: c.order
+  }));
+};
+
+export const createCategory = async (name: string): Promise<Category> => {
+  const userId = await ensureUserExists();
+
+  // Get the highest order value
+  const { data: maxOrderCat } = await supabase
+    .from('categories')
+    .select('order')
+    .is('deleted_at', null)
+    .order('order', { ascending: false })
+    .limit(1)
+    .single();
+
+  const newOrder = (maxOrderCat?.order ?? -1) + 1;
+
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({
+      user_id: userId,
+      name,
+      order: newOrder
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    name: data.name,
+    order: data.order
+  };
+};
+
+export const deleteCategory = async (id: string): Promise<void> => {
+  const { error } = await supabase
+    .from('categories')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) throw error;
+};
+
+export const updateCategoriesOrder = async (categoryOrders: { id: string; order: number }[]): Promise<void> => {
+  const updates = categoryOrders.map(({ id, order }) =>
+    supabase
+      .from('categories')
+      .update({ order })
+      .eq('id', id)
+  );
 
   const results = await Promise.all(updates);
 
