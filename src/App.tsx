@@ -485,49 +485,50 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const handleCallback = async () => {
+      // Check for error in query params
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
       const error_param = params.get('error');
       const error_description = params.get('error_description');
 
-      console.log('AuthCallback - URL:', window.location.href);
-      console.log('AuthCallback - code:', code ? 'present' : 'missing');
-      console.log('AuthCallback - error:', error_param);
-
       if (error_param) {
-        console.log('AuthCallback - OAuth error:', error_param, error_description);
         setError(error_description || error_param);
         return;
       }
 
-      if (!code) {
-        console.log('AuthCallback - No code, redirecting to login');
-        navigate('/', { replace: true });
+      // Check for hash fragment (implicit flow) or code (PKCE flow)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const code = params.get('code');
+
+      if (accessToken) {
+        // Implicit flow - token is in hash, Supabase client will pick it up automatically
+        // Just need to wait for the session to be set
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          setError(error.message);
+          return;
+        }
+
+        if (session) {
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      }
+
+      if (code) {
+        // PKCE flow - exchange code for session
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setError(error.message);
+          return;
+        }
+        navigate('/dashboard', { replace: true });
         return;
       }
 
-      console.log('AuthCallback - Exchanging code for session...');
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      console.log('AuthCallback - Exchange result:', { data, error });
-
-      if (error) {
-        console.log('AuthCallback - Exchange error:', error.message);
-        setError(error.message);
-        return;
-      }
-
-      // Verify session was created
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('AuthCallback - Session after exchange:', session ? 'exists' : 'null');
-
-      if (!session) {
-        setError('Failed to create session');
-        return;
-      }
-
-      // Redirect to dashboard after successful auth
-      console.log('AuthCallback - Success, redirecting to dashboard');
-      navigate('/dashboard', { replace: true });
+      // No token or code - redirect to login
+      navigate('/', { replace: true });
     };
 
     handleCallback();

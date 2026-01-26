@@ -1,5 +1,11 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/okrs", "destination": "/index.html" },
+    { "source": "/okrs/:id", "destination": "/index.html" },
+    { "source": "/goals", "destination": "/index.html" },
+    { "source": "/goals/:id", "destination": "/index.html" },
+    { "source": "/wins", "destination": "/index.html" },
+    { "source": "/auth/callback", "destination": "/index.html" }
   ]
 }
