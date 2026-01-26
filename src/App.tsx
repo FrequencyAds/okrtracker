@@ -75,6 +75,9 @@ const AppContent = () => {
     if (!session?.user) return;
 
     try {
+      // Ensure user exists in database on login/signup
+      await api.ensureUserExists();
+
       const [okrsData, goalsData, peopleData] = await Promise.all([
         api.fetchObjectives('okr'),
         api.fetchObjectives('goal'),
