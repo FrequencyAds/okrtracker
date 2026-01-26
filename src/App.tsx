@@ -94,21 +94,10 @@ const AppContent = () => {
 
   const handleAddObjective = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleAddObjective called', { newObjTitle, session: !!session?.user, view });
-
-    if (!newObjTitle.trim()) {
-      console.log('No title provided');
-      return;
-    }
-    if (!session?.user) {
-      console.log('No session');
-      return;
-    }
+    if (!newObjTitle.trim() || !session?.user) return;
 
     try {
       const objectiveType = view === 'goals' ? 'goal' : 'okr';
-      console.log('Creating objective:', { title: newObjTitle, type: objectiveType });
-
       const newObj = await api.createObjective({
         title: newObjTitle,
         type: objectiveType,
@@ -116,8 +105,6 @@ const AppContent = () => {
         description: undefined,
         initiatives: []
       });
-
-      console.log('Objective created:', newObj);
 
       if (objectiveType === 'goal') {
         setGoals([newObj, ...goals]);
