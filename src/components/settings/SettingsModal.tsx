@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Person } from '../../types';
+import { Person, Category } from '../../types';
 import { Modal } from '../ui/Modal';
 import { CloseIcon, TrashIcon } from '../icons';
 import { Avatar } from '../ui/SharedComponents';
@@ -11,10 +11,18 @@ interface SettingsModalProps {
     setPeople: (p: Person[]) => void;
     onAddPerson?: (name: string, initials: string, color: string) => Promise<Person | undefined>;
     onDeletePerson?: (id: string) => Promise<void>;
+    categories: Category[];
+    setCategories: (c: Category[]) => void;
+    onAddCategory?: (name: string) => Promise<Category | undefined>;
+    onDeleteCategory?: (id: string) => Promise<void>;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, people, setPeople, onAddPerson, onDeletePerson }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+    isOpen, onClose, people, setPeople, onAddPerson, onDeletePerson,
+    categories, setCategories, onAddCategory, onDeleteCategory
+}) => {
     const [newName, setNewName] = useState("");
+    const [newCategoryName, setNewCategoryName] = useState("");
 
     const handleAddPerson = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -43,6 +51,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, p
             await onDeletePerson(id);
         } else {
             setPeople(people.filter(p => p.id !== id));
+        }
+    };
+
+    const handleAddCategory = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newCategoryName.trim()) return;
+
+        if (onAddCategory) {
+            await onAddCategory(newCategoryName);
+        } else {
+            const newCategory: Category = {
+                id: Date.now().toString(),
+                name: newCategoryName,
+                order: categories.length
+            };
+            setCategories([...categories, newCategory]);
+        }
+        setNewCategoryName("");
+    };
+
+    const handleDeleteCategory = async (id: string) => {
+        if (onDeleteCategory) {
+            await onDeleteCategory(id);
+        } else {
+            setCategories(categories.filter(c => c.id !== id));
         }
     };
 
@@ -76,6 +109,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, p
                             placeholder="Add new team member..."
                             value={newName}
                             onChange={(e) => setNewName(e.target.value)}
+                            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500"
+                        />
+                         <button type="submit" className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium border border-zinc-700">Add</button>
+                     </form>
+                 </div>
+
+                 <div className="mb-6">
+                     <h3 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-4">Departments</h3>
+                     <div className="space-y-2 mb-4">
+                         {categories.map(category => (
+                             <div key={category.id} className="flex items-center justify-between p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+                                 <span className="text-zinc-200">{category.name}</span>
+                                 <button onClick={() => handleDeleteCategory(category.id)} className="text-zinc-600 hover:text-red-500"><TrashIcon /></button>
+                             </div>
+                         ))}
+                     </div>
+
+                     <form onSubmit={handleAddCategory} className="flex gap-2">
+                         <input
+                            type="text"
+                            placeholder="Add new department..."
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
                             className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500"
                         />
                          <button type="submit" className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium border border-zinc-700">Add</button>

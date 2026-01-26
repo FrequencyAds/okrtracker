@@ -64,6 +64,15 @@ export const ObjectiveCard: React.FC<ObjectiveCardProps> = ({
                             {objective.category}
                         </span>
                     )}
+                    {objective.status && (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            objective.status === 'on_track' ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/50' :
+                            objective.status === 'at_risk' ? 'bg-amber-900/30 text-amber-400 border border-amber-800/50' :
+                            'bg-zinc-800 text-zinc-500 border border-zinc-700/50'
+                        }`}>
+                            {objective.status === 'on_track' ? 'On Track' : objective.status === 'at_risk' ? 'At Risk' : 'New'}
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-start gap-2">
                     {objective.description && (
