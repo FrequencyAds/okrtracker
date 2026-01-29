@@ -1,0 +1,33 @@
+name: PR Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Remove PR alias
+        run: |
+          echo "PR #${{ github.event.pull_request.number }} has been closed."
+          echo "Removing alias: pr-${{ github.event.pull_request.number }}.branch.okrs.frequency.media"
+          echo ""
+
+          # Remove the PR-specific alias
+          vercel alias rm pr-${{ github.event.pull_request.number }}.branch.okrs.frequency.media --yes --token=${{ secrets.VERCEL_TOKEN }} || true
+
+          if [[ "${{ github.event.pull_request.merged }}" == "true" ]]; then
+            echo "Status: PR was merged into ${{ github.event.pull_request.base.ref }}"
+          else
+            echo "Status: PR was closed without merging"
+          fi
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
